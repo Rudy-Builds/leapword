@@ -76,8 +76,9 @@ function checkSchedule(schedule, wordLength) {
   if (schedule.epoch !== EPOCH_ISO) {
     throw new Error(`${where} epoch is ${schedule.epoch}, app expects ${EPOCH_ISO}`)
   }
-  // 4.json predates the stream split and carries no cadence; 'daily' is the
-  // only thing it could ever have meant. See build-schedule.mjs.
+  // Both schedules declare a cadence now. The fallback covers the older shape,
+  // where 4.json had no such field — 'daily' is the only thing it could have
+  // meant, and a cached copy of it shouldn't fail the assertion below.
   const cadence = schedule.cadence ?? 'daily'
   const expected = wordLength === LONG_LEN ? 'sunday' : 'daily'
   if (cadence !== expected) {

@@ -352,6 +352,37 @@ if (STREAM.cadence === 'sunday') {
 // ---------------------------------------------------------------------------
 // 3. Emit.
 // ---------------------------------------------------------------------------
+
+// A note to whoever opens this file, and the reason it's first.
+//
+// The schedule is public and always will be — it's a static site, the answers
+// have to reach the browser somehow, and pretending otherwise would be security
+// theatre. So the honest move is to assume someone curious will find it and to
+// talk to them when they do, rather than to hide it badly.
+//
+// JSON has no comments, so it has to be a real field. `write()` emits the file
+// as a single line, which means the first key is literally the first thing
+// anyone sees — in the raw file, in DevTools, in a browser's JSON viewer. It
+// costs ~450 bytes on a 179 KB file and every reader is a person we'd rather
+// have as a contributor than as a spoiler.
+const READ_THIS_FIRST = [
+  'Congratulations — you found every answer. Genuinely: nice digging.',
+  '',
+  'Now please don’t ruin it for everyone else.',
+  '',
+  'Leapword is one puzzle a day, and everybody plays the same one. That’s the',
+  'entire point of it, and a leaked answer is the one thing that can’t be',
+  'un-leaked. So keep these to yourself.',
+  '',
+  'The game is open source so people can learn from it and enjoy it — you’re',
+  'very welcome in here. Better yet, build on it: fork it, improve it, send a',
+  'pull request. Making the game better beats spoiling it every time.',
+  '',
+  'https://github.com/Rudy-Builds/leapword',
+  '',
+  'Thank you. — Rudy',
+]
+
 if (DRY) {
   console.log('\n--dry-run: nothing written')
   console.log('\nfirst 20:')
@@ -360,15 +391,15 @@ if (DRY) {
   await write(
     SCHEDULE_PATH,
     {
+      // First, deliberately. See above.
+      READ_THIS_FIRST,
       v: 1,
       epoch: EPOCH,
       wordLength: WORD_LEN,
       // How the client turns a day number into an index here. Shipped so the
       // app can assert it agrees rather than assume — a stream read with the
       // wrong indexing serves plausible puzzles on the wrong days, which is the
-      // failure mode nobody notices. Absent in 4.json, which predates the split
-      // and is not being rewritten to add a field; the client reads a missing
-      // cadence as 'daily', its only possible meaning.
+      // failure mode nobody notices.
       cadence: STREAM.cadence,
       firstDay: STREAM.firstDay,
       leaps: LEAPS,

@@ -63,12 +63,24 @@ describe('shipped schedules', () => {
     })
   }
 
-  // 4.json predates the split and carries no cadence field. Boot reads a missing
-  // one as 'daily'; this pins that it is genuinely absent rather than wrong, so
-  // the day someone regenerates it the two stop agreeing loudly instead of
-  // quietly.
   test('the everyday stream is a daily stream', () => {
-    assert.equal(schedules[SHORT_LEN].cadence ?? 'daily', 'daily')
+    assert.equal(schedules[SHORT_LEN].cadence, 'daily')
+    assert.equal(schedules[SHORT_LEN].firstDay, 1)
+  })
+
+  // The schedules are public and spoil the game outright, so each one opens
+  // with a note asking whoever found it not to ruin it for everyone. Its being
+  // FIRST is the whole point — that's what makes it the first thing anyone
+  // sees — and a key that only matters for its position is exactly the kind
+  // that a later edit reorders without noticing.
+  test('each schedule opens with the note to whoever found it', () => {
+    for (const len of [SHORT_LEN, LONG_LEN]) {
+      const keys = Object.keys(schedules[len])
+      assert.equal(keys[0], 'READ_THIS_FIRST', `${len}.json buries the note at index ${keys.indexOf('READ_THIS_FIRST')}`)
+      const text = schedules[len].READ_THIS_FIRST.join(' ')
+      assert.match(text, /github\.com\/Rudy-Builds\/leapword/, `${len}.json note lost the repo link`)
+      assert.ok(text.length > 200, `${len}.json note looks truncated`)
+    }
   })
 
   test('the Sunday stream declares its cadence and start day', () => {
