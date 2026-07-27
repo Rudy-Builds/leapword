@@ -144,6 +144,11 @@ html, body {
    as an event, where the archive bar is deliberately a murmur. */
 .challenge-bar { border-color: var(--leap); color: var(--ink); }
 
+/* Same bones again. Louder than the archive murmur because it explains an
+   anomaly the player is looking at right now, quieter than the challenge bar
+   because it's a weekly fixture rather than an event. */
+.sunday-bar { border-color: var(--accent); color: var(--ink); }
+
 .archive-today {
   border: 0;
   padding: 0;
@@ -241,6 +246,15 @@ html, body {
   background: var(--panel-2);
   border: 1px solid var(--line);
 }
+/* Five-letter Sundays. Same fluid approach, wound down a notch so START → END
+   still lands on one line at 320px. */
+.header-words.long .miniword { gap: clamp(2px, 0.7vw, 3px); }
+.header-words.long .minitile {
+  width: clamp(16px, 4.6vw, 23px);
+  height: clamp(20px, 5.6vw, 27px);
+  font-size: clamp(10px, 2.9vw, 13px);
+}
+
 .miniword.start .minitile { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .miniword.end .minitile { border-color: color-mix(in srgb, var(--win) 55%, var(--line)); }
 
@@ -859,11 +873,25 @@ html, body {
   touch-action: manipulation;
 }
 .archive-row:hover { border-color: var(--accent); }
+/* The grid's first column is `auto`, so this sizes to the widest number+tag in
+   the list and every row's words stay on one left edge — including the rows
+   with no tag at all. */
 .archive-n {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+.archive-sun {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 0.6px;
 }
 .archive-words { font-weight: 700; letter-spacing: 0.5px; min-width: 0; }
 .archive-arrow { color: var(--muted); font-weight: 400; margin: 0 2px; }

@@ -31,7 +31,10 @@ export function PuzzleHeader({ start, end, par, movesUsed, moveCap, leapsRemaini
       </button>
 
       <div className="header-main">
-        <div className="header-words">
+        {/* Ten tiles and an arrow have to fit the same middle column four-letter
+            days fill with eight. Left alone they wrap, which strands the arrow
+            at the end of the first line. */}
+        <div className={`header-words ${start.length > 4 ? 'long' : ''}`}>
           <MiniWord word={start} tone="start" />
           <span className="arrow">→</span>
           <MiniWord word={end} tone="end" />

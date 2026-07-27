@@ -1,5 +1,5 @@
 import React from 'react'
-import { puzzleForDay } from '../game/daily.js'
+import { isLongDay, puzzleForDay } from '../game/daily.js'
 import { loadCompletions } from '../state/storage.js'
 
 // A star row for a played puzzle: filled pips for stars earned, hollow for the
@@ -24,7 +24,7 @@ function Pips({ stars }) {
  * here would offer a second, streak-free way to play the very puzzle the streak
  * is about. Tapping a row opens it in archive-play mode (Boot routes "/N").
  */
-export function ArchivePage({ today, schedule, onOpen, onClose }) {
+export function ArchivePage({ today, schedules, onOpen, onClose }) {
   const completions = loadCompletions()
   const days = []
   for (let n = today - 1; n >= 1; n--) days.push(n)
@@ -46,13 +46,18 @@ export function ArchivePage({ today, schedule, onOpen, onClose }) {
       ) : (
         <ul className="archive-list">
           {days.map((n) => {
-            const puzzle = puzzleForDay(n, schedule)
+            const puzzle = puzzleForDay(n, schedules)
             const stars = completions[n]
             const played = stars != null
             return (
               <li key={n}>
                 <button className="archive-row" type="button" onClick={() => onOpen(n)}>
-                  <span className="archive-n">#{n}</span>
+                  <span className="archive-n">
+                    #{n}
+                    {/* The longer words are self-evident once you read the row;
+                        the tag is for scanning the column and finding them. */}
+                    {isLongDay(n) && <span className="archive-sun">SUN</span>}
+                  </span>
                   <span className="archive-words">
                     {puzzle.start} <span className="archive-arrow">→</span> {puzzle.end}
                   </span>

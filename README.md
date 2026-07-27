@@ -32,6 +32,7 @@ The rules fit on a napkin:
 - **No repeats** — you can't reuse a word already on your ladder.
 - **Stuck?** Spend a **leap** 🟪 to jump straight to a *synonym* of your current word. You get **two per puzzle**, and each one costs you a star.
 - **Reach END** within **par + 4** moves or the puzzle locks as unsolved.
+- **Sundays are five letters.** Every other day is four. Same rules, longer words.
 
 Then you get a Wordle-style card to share — no spoilers, just your path:
 
@@ -70,6 +71,7 @@ That single promise shapes a surprising amount of the design:
 - **The synonym menu ships with the game.** Leaps work offline from any word, and because the options are precomputed, no live API call can ever hint at which way is "toward the answer." ([`src/game/synonyms.js`](src/game/synonyms.js))
 - **The daily schedule is a committed artifact, not a build output.** ~6000 days (~16 years) of puzzles live in the repo. The generator is *append-only* by default and refuses to rewrite history without an explicit `--rebuild --force` — because rewriting day 42 would betray everyone who already played it.
 - **Every move is saved, not just the result** — otherwise a mid-game refresh would be a free retry. ([`src/state/storage.js`](src/state/storage.js))
+- **Five-letter Sundays were added without moving a single published day.** They run as a *second stream* (`schedule/5.json`) indexed by Sunday ordinal, while the everyday stream keeps indexing by day number and simply skips a Sunday. So no four-letter day changed — and the rule starts at #18 rather than reaching back to #4 and #11, which had already been played as four-letter puzzles. Same promise, applied to a feature that could easily have broken it.
 
 The game logic is pure and trivially testable, so you can read exactly how a move, a leap, and a star are decided:
 
@@ -84,7 +86,7 @@ npm test    # share text, day maths, streaks, star scoring — no browser needed
 | [`src/game/rules.js`](src/game/rules.js) | Pure move validation + star scoring. The runtime needs only a word `Set` and a char-diff. |
 | [`src/game/synonyms.js`](src/game/synonyms.js) | Leap targets, from the bundled synonym map — so leaps work offline and never leak the solution. |
 | [`src/game/puzzle.js`](src/game/puzzle.js) | Hydrates a puzzle from one schedule line. `start`, `end`, `par`, `solution` are all *derived* from the path, so they can't disagree with it. |
-| [`src/game/daily.js`](src/game/daily.js) | Which puzzle is today. Local midnight (like Wordle) so the countdown reads true against your own clock. |
+| [`src/game/daily.js`](src/game/daily.js) | Which puzzle is today, and how long it is. Local midnight (like Wordle) so the countdown reads true against your own clock; Sundays from #18 come from the five-letter stream. |
 | [`src/game/share.js`](src/game/share.js) | The share card — the spoiler-proof one described above. |
 | [`src/state/useGame.js`](src/state/useGame.js) | Reducer holding path / moves / leaps / status. |
 | [`src/state/storage.js`](src/state/storage.js) | Today's progress, saved every move. |
@@ -106,18 +108,18 @@ npm test           # pure unit tests
 ### Rebuild the puzzle data (optional)
 
 ```bash
-npm run build:schedule     # public/schedule/4.json — fast, 2 fetches + BFS
-npm run build:assets       # public/dict/4.json + public/syn/4.json — slow Datamuse sweep
+npm run build:schedule     # public/schedule/{4,5}.json — fast, 2 fetches + BFS
+npm run build:assets       # public/dict/ + public/syn/ — slow Datamuse sweep
 npm run build:icons        # public/og.png + apple-touch-icon.png (needs Chrome)
 ```
 
-Each takes a word length (default 4), e.g. `node scripts/build-schedule.mjs 5`. Use `--dry-run` to see the stats without writing, and remember: the schedule is append-only history — `build-schedule` won't rewrite existing days without `--rebuild --force`.
+Each script takes a word length, e.g. `node scripts/build-schedule.mjs 5`, and the length picks the stream: **4 is the everyday puzzle, 5 is Sundays.** Use `--dry-run` to see the stats without writing, and remember: the schedule is append-only history — `build-schedule` won't rewrite existing days without `--rebuild --force`.
 
 ---
 
 ## 🗺 Roadmap
 
-Shipped: streaks, deep-linked share cards, a past-puzzles archive. Deferred (and sketched out in the design doc): Supabase + anonymous auth, cross-device sync, and a 4–6 letter length rotation to keep the daily board fresh.
+Shipped: streaks, deep-linked share cards, a past-puzzles archive, five-letter Sundays. Deferred (and sketched out in the design doc): Supabase + anonymous auth, cross-device sync, and widening the length rotation past the current 4/5 split.
 
 ---
 

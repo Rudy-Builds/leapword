@@ -2,7 +2,17 @@
 //   TZ=America/New_York node --test src/game/
 import assert from 'node:assert/strict'
 import { test, describe } from 'node:test'
-import { dayNumber, formatCountdown, msUntilNextPuzzle, puzzleForDay } from './daily.js'
+import {
+  FIRST_LONG_DAY,
+  dayNumber,
+  formatCountdown,
+  isLongDay,
+  msUntilNextPuzzle,
+  puzzleForDay,
+  streamIndexForDay,
+  weekdayForDay,
+  wordLengthForDay,
+} from './daily.js'
 
 const at = (y, m, d, h = 12) => new Date(y, m, d, h)
 
@@ -78,14 +88,99 @@ describe('formatCountdown', () => {
   })
 })
 
+// The calendar these all hang off: #1 is Thursday 2026-07-16, so #4, #11, #18…
+// are the Sundays, and FIRST_LONG_DAY (#18) is the first one that is five
+// letters. #4 and #11 shipped as four-letter puzzles and must stay that way.
+describe('weekdayForDay', () => {
+  test('#1 is a Thursday, and the week turns from there', () => {
+    assert.equal(weekdayForDay(1), 4)
+    assert.deepEqual([2, 3, 4, 5, 6, 7, 8].map(weekdayForDay), [5, 6, 0, 1, 2, 3, 4])
+  })
+
+  test('agrees with the real calendar for a whole year', () => {
+    for (let n = 1; n <= 365; n++) {
+      const d = new Date(Date.UTC(2026, 6, 16) + (n - 1) * 86400000)
+      assert.equal(weekdayForDay(n), d.getUTCDay(), `#${n} (${d.toISOString().slice(0, 10)})`)
+    }
+  })
+
+  test('stays in 0..6 for a clock set before the epoch', () => {
+    for (const n of [0, -1, -7, -1000]) {
+      const w = weekdayForDay(n)
+      assert.ok(Number.isInteger(w) && w >= 0 && w <= 6, `n=${n} gave ${w}`)
+    }
+  })
+})
+
+describe('isLongDay / wordLengthForDay', () => {
+  test('the already-published Sundays stay four letters', () => {
+    for (const n of [4, 11]) {
+      assert.equal(weekdayForDay(n), 0, `#${n} should be a Sunday`)
+      assert.equal(isLongDay(n), false, `#${n} was published as four letters`)
+      assert.equal(wordLengthForDay(n), 4)
+    }
+  })
+
+  test('#18 is the first five-letter Sunday', () => {
+    assert.equal(FIRST_LONG_DAY, 18)
+    assert.equal(weekdayForDay(18), 0)
+    assert.equal(isLongDay(18), true)
+    assert.equal(wordLengthForDay(18), 5)
+  })
+
+  test('every Sunday after it is long, and nothing else ever is', () => {
+    for (let n = 1; n <= 400; n++) {
+      const sundayFromCutover = weekdayForDay(n) === 0 && n >= FIRST_LONG_DAY
+      assert.equal(isLongDay(n), sundayFromCutover, `#${n}`)
+      assert.equal(wordLengthForDay(n), sundayFromCutover ? 5 : 4, `#${n}`)
+    }
+  })
+})
+
+describe('streamIndexForDay', () => {
+  test('the everyday stream is still indexed by day number', () => {
+    for (const n of [1, 2, 3, 4, 11, 12, 17, 19, 100]) {
+      assert.equal(streamIndexForDay(n), n - 1, `#${n}`)
+    }
+  })
+
+  // This is the regression that matters most: every four-letter day, past and
+  // future, must resolve to the same schedule entry it did before Sundays split
+  // off. Anything else silently reshuffles days people have already played.
+  test('no four-letter day moved when Sundays split off', () => {
+    for (let n = 1; n <= 2000; n++) {
+      if (!isLongDay(n)) assert.equal(streamIndexForDay(n), n - 1, `#${n} moved`)
+    }
+  })
+
+  test('the Sunday stream counts Sundays, not days', () => {
+    assert.equal(streamIndexForDay(18), 0)
+    assert.equal(streamIndexForDay(25), 1)
+    assert.equal(streamIndexForDay(32), 2)
+  })
+
+  test('every Sunday index is a whole number, in order, with no gaps', () => {
+    const seen = []
+    for (let n = 1; n <= 5000; n++) if (isLongDay(n)) seen.push(streamIndexForDay(n))
+    assert.ok(seen.every(Number.isInteger), 'produced a fractional index')
+    assert.deepEqual(seen, seen.map((_, i) => i))
+  })
+})
+
 describe('puzzleForDay', () => {
-  const schedule = {
-    leaps: 2,
-    paths: ['KIND FIND FINE FIVE GIVE', 'WAIT WANT WENT SENT SEND', 'COOL FOOL FOOD GOOD GOLD'],
+  const schedules = {
+    4: {
+      leaps: 2,
+      paths: ['KIND FIND FINE FIVE GIVE', 'WAIT WANT WENT SENT SEND', 'COOL FOOL FOOD GOOD GOLD'],
+    },
+    5: {
+      leaps: 2,
+      paths: ['MOVED LOVED LIVED LIKED LIKES', 'THESE THOSE WHOSE WHOLE WHILE'],
+    },
   }
 
   test('day 1 is the first path', () => {
-    const p = puzzleForDay(1, schedule)
+    const p = puzzleForDay(1, schedules)
     assert.equal(p.start, 'KIND')
     assert.equal(p.end, 'GIVE')
     assert.equal(p.par, 4)
@@ -94,22 +189,46 @@ describe('puzzleForDay', () => {
   })
 
   test('wraps past the end instead of returning undefined', () => {
-    assert.equal(puzzleForDay(4, schedule).start, 'KIND')
-    assert.equal(puzzleForDay(3001, schedule).start, 'KIND')
+    assert.equal(puzzleForDay(4, schedules).start, 'KIND')
+    assert.equal(puzzleForDay(3001, schedules).start, 'KIND')
   })
 
   test('a clock set before the epoch still returns a puzzle', () => {
     for (const n of [0, -1, -7, -1000]) {
-      assert.ok(puzzleForDay(n, schedule).start, `n=${n} produced nothing`)
+      assert.ok(puzzleForDay(n, schedules).start, `n=${n} produced nothing`)
     }
   })
 
   test('par is always path length minus one', () => {
     for (let n = 1; n <= 6; n++) {
-      const p = puzzleForDay(n, schedule)
+      const p = puzzleForDay(n, schedules)
       assert.equal(p.par, p.solution.length - 1)
       assert.equal(p.start, p.solution[0])
       assert.equal(p.end, p.solution.at(-1))
     }
+  })
+
+  test('draws Sundays from the five-letter stream, by Sunday ordinal', () => {
+    assert.equal(puzzleForDay(18, schedules).start, 'MOVED')
+    assert.equal(puzzleForDay(25, schedules).start, 'THESE')
+    // ...and wraps within its own stream, not the other one.
+    assert.equal(puzzleForDay(32, schedules).start, 'MOVED')
+  })
+
+  test('every word of a long day really is five letters', () => {
+    const p = puzzleForDay(18, schedules)
+    assert.equal(p.wordLength, 5)
+    assert.ok(p.solution.every((w) => w.length === 5))
+  })
+
+  test('the published Sundays still come from the four-letter stream', () => {
+    // Entry (n-1) of the everyday stream, wrapped — #4 → 3 % 3, #11 → 10 % 3.
+    assert.equal(puzzleForDay(4, schedules).start, 'KIND')
+    assert.equal(puzzleForDay(11, schedules).start, 'WAIT')
+    for (const n of [4, 11]) assert.equal(puzzleForDay(n, schedules).wordLength, 4)
+  })
+
+  test('names the missing stream rather than dying on undefined', () => {
+    assert.throws(() => puzzleForDay(18, { 4: schedules[4] }), /5-letter schedule/)
   })
 })

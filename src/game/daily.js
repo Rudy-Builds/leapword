@@ -1,4 +1,10 @@
-// Which puzzle is "today", and how long until the next one.
+// Which puzzle is "today", how long until the next one, and what shape it is.
+//
+// Shape lives here rather than in its own module because it is the same
+// question: a day number is the only input, this file owns the epoch that day
+// numbers are counted from, and every rule below is arithmetic on that one
+// constant. Splitting it out would mean either a second copy of the epoch or an
+// import cycle with this file.
 //
 // Local midnight, not UTC — matching Wordle. The countdown has to read "next
 // puzzle in 6h" against the player's own clock; under UTC a US-West player's
@@ -54,15 +60,78 @@ export function formatCountdown(ms) {
   return `${s}s`
 }
 
+// ---------------------------------------------------------------------------
+// Puzzle shape: Sundays are longer.
+// ---------------------------------------------------------------------------
+
+/** Everyday puzzles. */
+export const SHORT_LEN = 4
+/** Sundays, from FIRST_LONG_DAY on. */
+export const LONG_LEN = 5
+
 /**
- * The puzzle for day `n`.
+ * #18 — Sunday 2026-08-02, the first Sunday after five-letter Sundays shipped.
  *
- * Wraps rather than running off the end, so a player in 2042 gets a repeat
+ * Sundays before it (#4 and #11) stay four letters forever. They were published,
+ * played and shared as four-letter puzzles, and a rule that reached backwards
+ * would turn every archive row and every screenshot of them into a lie — the
+ * same reason build-schedule.mjs treats the schedule as append-only. So the rule
+ * is "Sundays from #18", not "Sundays".
+ *
+ * Must never move once shipped, for exactly that reason: shifting it by one
+ * Sunday re-points every five-letter day at a different puzzle. schedule/5.json
+ * carries the same number as `firstDay` and Boot asserts the two agree.
+ */
+export const FIRST_LONG_DAY = 18
+
+// Thursday (4). Derived, not written down, so it cannot drift from EPOCH_ISO.
+const EPOCH_WEEKDAY = new Date(EPOCH_UTC).getUTCDay()
+
+/** Day of the week puzzle #n falls on, 0 = Sunday .. 6 = Saturday. */
+export function weekdayForDay(n) {
+  return (((n - 1 + EPOCH_WEEKDAY) % 7) + 7) % 7
+}
+
+/** Is #n one of the long Sunday puzzles? */
+export function isLongDay(n) {
+  return n >= FIRST_LONG_DAY && weekdayForDay(n) === 0
+}
+
+export function wordLengthForDay(n) {
+  return isLongDay(n) ? LONG_LEN : SHORT_LEN
+}
+
+/**
+ * Where #n sits inside its own stream — the two are indexed differently, and
+ * that asymmetry is deliberate (see STREAMS in scripts/build-schedule.mjs).
+ *
+ * The everyday stream is indexed by day number, unchanged from before Sundays
+ * split off. That is what guarantees no already-published four-letter day moved:
+ * #12 is schedule/4.json entry 11 today, tomorrow and in 2043. It simply skips
+ * an entry each Sunday now.
+ *
+ * The Sunday stream is indexed by Sunday ordinal: #18 is entry 0, #25 is entry
+ * 1. `n` is a Sunday at or after FIRST_LONG_DAY here, so (n - FIRST_LONG_DAY) is
+ * always a non-negative multiple of 7.
+ */
+export function streamIndexForDay(n) {
+  return isLongDay(n) ? (n - FIRST_LONG_DAY) / 7 : n - 1
+}
+
+/**
+ * The puzzle for day `n`, drawn from whichever stream that day belongs to.
+ *
+ * @param {number} n
+ * @param {Record<number, object>} schedules  loaded schedules, keyed by word length
+ *
+ * Wraps rather than running off the end, so a player in 2043 gets a repeat
  * instead of a white screen. The double-modulo keeps the index positive if `n`
  * is somehow <= 0 — a clock set before the epoch shouldn't crash the app either.
  */
-export function puzzleForDay(n, schedule) {
+export function puzzleForDay(n, schedules) {
+  const schedule = schedules[wordLengthForDay(n)]
+  if (!schedule) throw new Error(`no ${wordLengthForDay(n)}-letter schedule loaded for #${n}`)
   const len = schedule.paths.length
-  const i = (((n - 1) % len) + len) % len
+  const i = ((streamIndexForDay(n) % len) + len) % len
   return puzzleFromPath(schedule.paths[i], schedule)
 }

@@ -9,8 +9,8 @@
     "build": "vite build",
     "preview": "npm run build && wrangler dev",
     "test": "TZ=America/New_York node --test \"src/**/*.test.js\"",
-    "build:assets": "node scripts/build-assets.mjs 4",
-    "build:schedule": "node scripts/build-schedule.mjs 4",
+    "build:assets": "node scripts/build-assets.mjs 4 && node scripts/build-assets.mjs 5",
+    "build:schedule": "node scripts/build-schedule.mjs 4 && node scripts/build-schedule.mjs 5",
     "build:icons": "node scripts/build-icons.mjs",
     "deploy": "npm run build && wrangler deploy"
   },

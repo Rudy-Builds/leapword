@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { isLongDay } from '../game/daily.js'
 import { useGame } from '../state/useGame.js'
 import { useStreak } from '../state/useStreak.js'
 import { hasSeenHelp, markHelpSeen, recordCompletion } from '../state/storage.js'
@@ -38,6 +39,7 @@ export function LeapwordGame({ puzzle, dictSet, synMap, number, isArchive = fals
   // back to it — Share lives inside. Resets per puzzle via the key={number} remount.
   const [resultOpen, setResultOpen] = useState(true)
   const playing = game.status === 'playing'
+  const isSunday = isLongDay(number)
 
   // Marked on close rather than on open: dismissing it is the signal they've
   // read it, so refreshing with it still up shows it again. Idempotent, so a
@@ -94,10 +96,25 @@ export function LeapwordGame({ puzzle, dictSet, synMap, number, isArchive = fals
             play; returns once the game ends and the bar's job is done. */}
         {isArchive && !(playing && challenge) && (
           <div className="archive-bar">
-            <span>Leapword #{number} · a past puzzle</span>
+            <span>
+              Leapword #{number} · a past {isSunday ? 'Sunday' : 'puzzle'}
+            </span>
             <button type="button" className="archive-today" onClick={onPlayToday}>
               Play today’s #{today} →
             </button>
+          </div>
+        )}
+
+        {/* Five letters instead of four is a big enough change to look like a
+            bug rather than a ritual, so Sunday says so out loud. Shown every
+            Sunday, not just the first: it's the same reason a crossword prints
+            "Sunday" on the Sunday grid — the point is that the day is an
+            occasion, and a one-time tooltip would make it an error message.
+            Last in the bar priority (challenge, then past-puzzle, then this):
+            phone rows are scarce and those two are why the visitor is here. */}
+        {isSunday && !isArchive && !(playing && challenge) && (
+          <div className="archive-bar sunday-bar">
+            <span>🗓️ Sundays are five letters</span>
           </div>
         )}
 

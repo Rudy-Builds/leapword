@@ -4,8 +4,14 @@ import { LeapwordGame } from './components/LeapwordGame.jsx'
 import { ArchivePage } from './components/ArchivePage.jsx'
 import { LegalPage } from './components/LegalPage.jsx'
 import { decodeChallenge } from './game/challenge.js'
-import { puzzleForDay, EPOCH_ISO } from './game/daily.js'
-import { WORD_LEN } from './game/puzzle.js'
+import {
+  EPOCH_ISO,
+  FIRST_LONG_DAY,
+  LONG_LEN,
+  SHORT_LEN,
+  puzzleForDay,
+  wordLengthForDay,
+} from './game/daily.js'
 import { useDayNumber } from './state/useDayNumber.js'
 import { useRoute } from './state/useRoute.js'
 import { useViewportHeight } from './state/useViewportHeight.js'
@@ -19,7 +25,7 @@ import './styles/app.css'
  * deploy surfaces as "Unexpected token '<'", which names neither the file nor the
  * cause. Checking the content type turns that into something debuggable.
  */
-async function getJson(url) {
+async function fetchJson(url) {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`)
   const type = res.headers.get('content-type') ?? ''
@@ -29,10 +35,71 @@ async function getJson(url) {
   return res.json()
 }
 
-// Loads the dictionary, synonym map and daily schedule once, then hands them to
-// the game. All three are fetched in parallel against WORD_LEN rather than
-// chaining on the schedule's own wordLength — one round trip beats two, and the
-// assertion below catches the only way that could be wrong.
+// Fetched assets, kept for the life of the tab.
+//
+// The load effect re-runs when the played puzzle changes length — opening a
+// five-letter Sunday from the archive needs that day's dictionary, which a
+// four-letter session never fetched. Without this cache, walking back and forth
+// between a Sunday and a weekday would re-download both dictionaries every time.
+// Failures are evicted so a retry is a real retry rather than a cached rejection.
+const assetCache = new Map()
+function getJson(url) {
+  if (!assetCache.has(url)) {
+    assetCache.set(
+      url,
+      fetchJson(url).catch((e) => {
+        assetCache.delete(url)
+        throw e
+      }),
+    )
+  }
+  return assetCache.get(url)
+}
+
+/** Both shipped streams. Schedules are small and the archive lists days from both. */
+const LENGTHS = [SHORT_LEN, LONG_LEN]
+
+/**
+ * A schedule that disagrees with the app about how it is indexed still renders
+ * perfectly plausible puzzles — just on the wrong days, silently. Every field
+ * the client uses to pick an entry is therefore checked against the constant it
+ * is supposed to match, and a mismatch is fatal rather than absorbed.
+ */
+function checkSchedule(schedule, wordLength) {
+  const where = `schedule/${wordLength}.json`
+  if (schedule.wordLength !== wordLength) {
+    throw new Error(`${where} declares ${schedule.wordLength}-letter puzzles`)
+  }
+  // dayNumber() counts from EPOCH_ISO; a schedule indexes its paths from its
+  // own epoch. If they ever disagree, every player silently gets the wrong
+  // day's puzzle — fail loudly instead.
+  if (schedule.epoch !== EPOCH_ISO) {
+    throw new Error(`${where} epoch is ${schedule.epoch}, app expects ${EPOCH_ISO}`)
+  }
+  // 4.json predates the stream split and carries no cadence; 'daily' is the
+  // only thing it could ever have meant. See build-schedule.mjs.
+  const cadence = schedule.cadence ?? 'daily'
+  const expected = wordLength === LONG_LEN ? 'sunday' : 'daily'
+  if (cadence !== expected) {
+    throw new Error(`${where} is a '${cadence}' stream, app indexes it as '${expected}'`)
+  }
+  if (cadence === 'sunday' && schedule.firstDay !== FIRST_LONG_DAY) {
+    throw new Error(`${where} starts at #${schedule.firstDay}, app expects #${FIRST_LONG_DAY}`)
+  }
+  return schedule
+}
+
+// Loads the dictionary, synonym map and schedules, then hands them to the game.
+//
+// Which dictionary depends on the day being played: Sundays from #18 are five
+// letters, everything else is four. The length is computed from the day number
+// alone, so all of it still goes out in parallel — nothing waits on the
+// schedule to announce its own wordLength, and checkSchedule catches the only
+// way that shortcut could be wrong.
+//
+// Both schedules load regardless, because the archive lists days of both lengths
+// side by side and 5.json is 31 KB. The dictionaries are the big files (27 KB
+// and 69 KB) and only the played length's is fetched.
 function Boot() {
   useViewportHeight()
   const [assets, setAssets] = useState(null)
@@ -49,26 +116,41 @@ function Boot() {
     if (isFuture) navigate('/', { replace: true })
   }, [isFuture, navigate])
 
+  // A past number is an archive/challenge play — the exact puzzle a link named,
+  // shown off-cycle. Today (or no request, or the future fallback above) is the
+  // real daily. Derived before the load because the day decides which dictionary
+  // the load needs.
+  const isArchive = route.view === 'day' && route.day < today
+  const number = isArchive ? route.day : today
+  const wordLength = wordLengthForDay(number)
+
   useEffect(() => {
+    let cancelled = false
+    // Cleared per run, not just set on failure. This effect re-runs when the
+    // played length changes, so without this a one-off failure fetching the
+    // five-letter dictionary would keep the error screen up after the player
+    // navigated back to a four-letter day whose assets are already in hand.
+    // getJson drops failed entries from its cache, so this really does retry.
+    setError(null)
     Promise.all([
-      getJson(`/dict/${WORD_LEN}.json`),
-      getJson(`/syn/${WORD_LEN}.json`),
-      getJson(`/schedule/${WORD_LEN}.json`),
+      getJson(`/dict/${wordLength}.json`),
+      getJson(`/syn/${wordLength}.json`),
+      ...LENGTHS.map((len) => getJson(`/schedule/${len}.json`)),
     ])
-      .then(([words, synMap, schedule]) => {
-        if (schedule.wordLength !== WORD_LEN) {
-          throw new Error(`schedule is ${schedule.wordLength}-letter, app is ${WORD_LEN}`)
-        }
-        // dayNumber() counts from EPOCH_ISO; the schedule indexes its paths
-        // from its own epoch. If they ever disagree, every player silently
-        // gets the wrong day's puzzle — fail loudly instead.
-        if (schedule.epoch !== EPOCH_ISO) {
-          throw new Error(`schedule epoch is ${schedule.epoch}, app expects ${EPOCH_ISO}`)
-        }
-        setAssets({ dictSet: new Set(words), synMap, schedule })
+      .then(([words, synMap, ...loaded]) => {
+        if (cancelled) return
+        const schedules = Object.fromEntries(
+          LENGTHS.map((len, i) => [len, checkSchedule(loaded[i], len)]),
+        )
+        setAssets({ wordLength, dictSet: new Set(words), synMap, schedules })
       })
-      .catch((e) => setError(String(e)))
-  }, [])
+      .catch((e) => {
+        if (!cancelled) setError(String(e))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [wordLength])
 
   // Static content pages, resolved before the asset gate: they need neither the
   // dictionary nor the schedule, so they open instantly and stay reachable even
@@ -79,28 +161,28 @@ function Boot() {
   }
 
   if (error) return <div className="boot">Failed to load: {error}</div>
-  if (!assets) return <div className="boot">Loading…</div>
+  // `assets.wordLength !== wordLength` is the moment after navigating from a
+  // four-letter day to a five-letter one, when the previous day's dictionary is
+  // still in state. Rendering through it would judge a five-letter puzzle
+  // against the four-letter word list and reject every legal move.
+  if (!assets || assets.wordLength !== wordLength) return <div className="boot">Loading…</div>
 
   // The past-puzzles index. A full view in place of the game — its own back
-  // button returns to today.
+  // button returns to today. It spans both streams, hence every schedule.
   if (route.view === 'archive') {
     return (
       <ArchivePage
         today={today}
-        schedule={assets.schedule}
+        schedules={assets.schedules}
         onOpen={(n) => navigate(`/${n}`)}
         onClose={() => navigate('/')}
       />
     )
   }
 
-  // A past number is an archive/challenge play — the exact puzzle a link named,
-  // shown off-cycle. Today (or no request, or the future fallback above) is the
-  // real daily. `number` drives what's shown and shared; `isArchive` decides
-  // whether it counts toward the streak (LeapwordGame turns persistence off).
-  const isArchive = route.view === 'day' && route.day < today
-  const number = isArchive ? route.day : today
-  const puzzle = puzzleForDay(number, assets.schedule)
+  // `number` drives what's shown and shared; `isArchive` decides whether it
+  // counts toward the streak (LeapwordGame turns persistence off).
+  const puzzle = puzzleForDay(number, assets.schedules)
 
   // The challenge applies only while the visitor is on the exact puzzle its link
   // named (route.day === challengeReq.day covers both an archive #N and a same-day
