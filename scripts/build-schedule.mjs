@@ -36,6 +36,13 @@ const GENERATOR_VERSION = 1
 const EPOCH = '2026-07-16' // Leapword #1. Must never move.
 const LEAPS = 2
 
+const dayToDate = (n) =>
+  new Date(Date.parse(EPOCH) + (n - 1) * 86400000).toISOString().slice(0, 10)
+const weekdayOf = (iso) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })
+/** Puzzle #n's weekday, Monday-first: 0 = Monday .. 6 = Sunday. */
+const mondayIndexOf = (n) => (new Date(Date.parse(EPOCH) + (n - 1) * 86400000).getUTCDay() + 6) % 7
+
 const PAR_MIN = 4
 const PAR_MAX = 6
 
@@ -60,9 +67,21 @@ const STREAMS = {
     cadence: 'daily',
     firstDay: 1,
     target: 6000, // ~16 years
-    // 7-day difficulty ramp, indexed by (dayIndex % 7). EPOCH's weekday is
-    // printed at build time so this stays honest if EPOCH ever changes.
-    parPattern: [4, 4, 5, 4, 5, 6, 4],
+    parIndex: 'weekday',
+    // Written MONDAY-FIRST and indexed by the puzzle's real weekday.
+    //
+    // The obvious `PAR_PATTERN[dayIndex % 7]` is what shipped first and it is
+    // wrong: it anchors slot 0 to EPOCH's weekday, and EPOCH is a Thursday. That
+    // rotated the entire ramp four days — Monday drew the par-5, Tuesday drew the
+    // par-6, and Sunday drew the easiest slot in the week. Index by weekday and
+    // the pattern means what it reads like.
+    //
+    // Ascending into the weekend: three gentle days, two mid, a par-6 Saturday.
+    // The Sunday slot is never SERVED from this stream (from #18 on, Sundays come
+    // from the five-letter one) but the scheduler still spends a candidate on it,
+    // so it stays in the cheapest bucket rather than burning a scarce par-6.
+    //            Mon Tue Wed Thu Fri Sat Sun
+    parPattern: [4, 4, 4, 5, 5, 6, 4],
   },
   5: {
     cadence: 'sunday',
@@ -73,10 +92,13 @@ const STREAMS = {
     // move: src/game/daily.js asserts against it.
     firstDay: 18,
     target: 900, // 900 Sundays ~ 17 years, so the stream outlives the daily one
-    // Indexed by Sunday ordinal, so this is a 7-WEEK ramp rather than a 7-day
-    // one. Weighted easier than the daily pattern on purpose: five letters is
+    // Every entry in this stream IS a Sunday, so there is no weekday to index by
+    // and `parIndex: 'weekday'` would be meaningless here — consecutive entries
+    // are consecutive Sundays, making this a 7-WEEK rotation rather than a 7-day
+    // ramp. Weighted easier than the daily pattern on purpose: five letters is
     // already the difficulty spike, and stacking a par-6 pattern on top of it is
     // how Sunday stops being the fun one. Four par-4s, two par-5s, one par-6.
+    parIndex: 'ordinal',
     parPattern: [4, 5, 4, 5, 4, 6, 4],
   },
 }
@@ -105,10 +127,17 @@ const LOOKAHEAD = 40000 // how far down the quality-sorted bucket to scan per da
 // otherwise does: it ranks paths by their rarest word, and SHIT (rank 284) is
 // common, so `STOP SHOP SHIP SHIT SUIT QUIT` scored better than clean rivals.
 //
-// Flip this to false for zero blocked interiors anywhere. Measured cost: none.
-// Both settings schedule the full 6000 days with 0 par-pattern fallbacks; true
-// leaves ~180 of 6000 (~10 in year one), false leaves 0.
-const ALLOW_BLOCKED_INTERIORS = true
+// Now false, and it is no longer a preference — it is load-bearing.
+//
+// A leap used to draw from a synonym map that was gated against the blocklist.
+// It now hands the player the next word of the ANSWER (see src/game/leap.js),
+// so an interior word is no longer private to your own ladder: the game will
+// actively put it in your mouth, which is the exact thing blocklist.mjs exists
+// to stop. 197 future four-letter days and 54 Sundays routed through one.
+//
+// Measured cost of turning it off: none. Both settings schedule the full 6000
+// days with 0 par-pattern fallbacks.
+const ALLOW_BLOCKED_INTERIORS = false
 
 const PAR_PATTERN = STREAM.parPattern
 
@@ -285,12 +314,18 @@ function take(par, day) {
   return null
 }
 
+// `day` below is the 0-based array index, so the puzzle number is day + 1.
+const parSlotFor =
+  STREAM.parIndex === 'weekday'
+    ? (day) => mondayIndexOf(day + 1)
+    : (day) => day % PAR_PATTERN.length
+
 const paths = [...kept]
 let starvedAt = null
 const fallbacks = []
 
 for (let day = kept.length; day < POOL_TARGET; day++) {
-  const wantPar = PAR_PATTERN[day % PAR_PATTERN.length]
+  const wantPar = PAR_PATTERN[parSlotFor(day)]
   let c = take(wantPar, day)
   if (!c) {
     // Difficulty ramp is a nice-to-have; a gap in the schedule is not. Take any
@@ -331,12 +366,11 @@ if (starvedAt !== null) {
   )
 }
 
-const dayToDate = (n) =>
-  new Date(Date.parse(EPOCH) + (n - 1) * 86400000).toISOString().slice(0, 10)
-const weekdayOf = (iso) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })
-
-console.log(`  epoch ${EPOCH} is a ${weekdayOf(EPOCH)} → PAR_PATTERN[0] lands there`)
+console.log(
+  STREAM.parIndex === 'weekday'
+    ? `  PAR_PATTERN is weekday-indexed, Monday first (epoch ${EPOCH} is a ${weekdayOf(EPOCH)})`
+    : `  PAR_PATTERN is a ${PAR_PATTERN.length}-entry rotation over stream ordinal, not weekdays`,
+)
 if (STREAM.cadence === 'sunday') {
   const first = dayToDate(STREAM.firstDay)
   const last = dayToDate(STREAM.firstDay + (paths.length - 1) * 7)
