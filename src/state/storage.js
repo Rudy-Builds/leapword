@@ -68,6 +68,9 @@ export const defaultStorage = {
           // Exactly enough to re-render ResultModal AND rebuild the share text.
           // `current` is omitted: it's always path.at(-1).
           status: state.status,
+          // Without this a reload turns "Gave up" into "Out of moves" — the two
+          // losses render differently and only this tells them apart.
+          gaveUp: state.gaveUp,
           path: state.path,
           movesUsed: state.movesUsed,
           leapsUsed: state.leapsUsed,

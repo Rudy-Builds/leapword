@@ -29,9 +29,19 @@ const fromBase64Url = (s) => atob(s.replace(/-/g, '+').replace(/_/g, '/'))
  *   moves, same contract as buildShareText. START is dropped before encoding
  *   (the recipient's puzzle already knows it); everything after is fixed-width,
  *   so no separators are needed.
+ * @param {number} leapsUsed  how many of those steps were leaps.
+ *
+ * The leap count has to be carried explicitly and used not to be. It became
+ * unrecoverable when leaps stopped being synonym jumps: a leap now moves you to
+ * the next rung of the answer, and when you are already on the answer that is
+ * one letter away — identical in the path to a move you typed. Left inferred, a
+ * two-leap 1 ★ run decoded as a spotless 3 ★.
+ *
+ * A leading digit is unambiguous because the old payload was strictly A–Z, so
+ * codes shared before this still decode (their count is inferred, as it was).
  */
-export function encodeChallenge(path) {
-  return toBase64Url(path.slice(1).join(''))
+export function encodeChallenge(path, leapsUsed = 0) {
+  return toBase64Url(`${leapsUsed}${path.slice(1).join('')}`)
 }
 
 /**
@@ -56,6 +66,14 @@ export function decodeChallenge(code, { puzzle, dictSet }) {
     return null
   }
 
+  // Leading digit = the sharer's leap count. Absent on codes minted before leaps
+  // became rung-walks, where inferring it from the path was still sound.
+  let declaredLeaps = null
+  if (/^[0-9]/.test(letters)) {
+    declaredLeaps = Number(letters[0])
+    letters = letters.slice(1)
+  }
+
   const len = puzzle.start.length
   if (!/^[A-Z]+$/.test(letters) || letters.length % len !== 0) return null
 
@@ -69,18 +87,24 @@ export function decodeChallenge(code, { puzzle, dictSet }) {
   const path = [puzzle.start, ...words]
   if (new Set(path).size !== path.length) return null
 
-  let leapsUsed = 0
+  // A step that isn't a one-letter swap can only have been a leap, so this is a
+  // floor on the count rather than the count itself.
+  let mustHaveLeapt = 0
   for (let i = 1; i < path.length; i++) {
     if (!dictSet.has(path[i])) return null
-    if (!isOneLetterDiff(path[i - 1], path[i])) leapsUsed++
+    if (!isOneLetterDiff(path[i - 1], path[i])) mustHaveLeapt++
   }
+  const leapsUsed = declaredLeaps ?? mustHaveLeapt
+  // Claiming fewer leaps than the path proves is the one lie worth catching:
+  // it is the direction that flatters the sharer's score.
+  if (leapsUsed < mustHaveLeapt) return null
   if (leapsUsed > puzzle.leaps) return null
 
   return {
     path,
     steps,
     leapsUsed,
-    stars: computeStars({ steps, par: puzzle.par, leapsUsed, solvedWithinCap: true }),
+    stars: computeStars({ steps, par: puzzle.par, leapsUsed, solved: true }),
   }
 }
 

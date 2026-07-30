@@ -113,14 +113,20 @@ describe('shipped schedules', () => {
   })
 
   test('no leap the game offers is a blocked word', async () => {
+    // A leap now hands over the next word of the ANSWER (src/game/leap.js), so
+    // interiors stopped being private to your own ladder — the game says them
+    // out loud. That makes this the strict version of the test above: every
+    // word of every path, not just the two public ones.
+    //
+    // Days #1-16 were published under the old synonym leap and are frozen by
+    // the append-only rule, so they are exempt; #12 routes through one.
     const { BLOCKED } = await import('../../scripts/blocklist.mjs')
+    const PUBLISHED_UNDER_OLD_LEAP = 16
     for (const len of [SHORT_LEN, LONG_LEN]) {
-      const syn = await load(`public/syn/${len}.json`)
-      for (const [word, targets] of Object.entries(syn)) {
-        assert.ok(!BLOCKED.has(word), `syn/${len}.json offers leaps from ${word}`)
-        for (const t of targets) {
-          assert.ok(!BLOCKED.has(t), `syn/${len}.json offers ${word}→${t}`)
-          assert.equal(t.length, len, `syn/${len}.json offers ${word}→${t}`)
+      for (const [i, line] of schedules[len].paths.entries()) {
+        if (len === SHORT_LEN && i < PUBLISHED_UNDER_OLD_LEAP) continue
+        for (const w of line.split(' ')) {
+          assert.ok(!BLOCKED.has(w), `${len}.json entry ${i} would let a leap offer ${w}`)
         }
       }
     }

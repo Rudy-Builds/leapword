@@ -73,8 +73,8 @@ export function HelpModal({ par, moveCap, onClose }) {
             <div className="help-term">
               <dt>Leaps ⤳</dt>
               <dd>
-                Jump straight to a <b>synonym</b> of your current word instead of
-                changing a letter. A leap costs a move and a star.
+                Moves you to the <b>next word of the answer</b>. Costs a move and a
+                star.
               </dd>
             </div>
           </dl>

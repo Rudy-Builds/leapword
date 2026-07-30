@@ -135,15 +135,14 @@ function Boot() {
     setError(null)
     Promise.all([
       getJson(`/dict/${wordLength}.json`),
-      getJson(`/syn/${wordLength}.json`),
       ...LENGTHS.map((len) => getJson(`/schedule/${len}.json`)),
     ])
-      .then(([words, synMap, ...loaded]) => {
+      .then(([words, ...loaded]) => {
         if (cancelled) return
         const schedules = Object.fromEntries(
           LENGTHS.map((len, i) => [len, checkSchedule(loaded[i], len)]),
         )
-        setAssets({ wordLength, dictSet: new Set(words), synMap, schedules })
+        setAssets({ wordLength, dictSet: new Set(words), schedules })
       })
       .catch((e) => {
         if (!cancelled) setError(String(e))
@@ -209,7 +208,6 @@ function Boot() {
       onOpenArchive={() => navigate('/archive')}
       puzzle={puzzle}
       dictSet={assets.dictSet}
-      synMap={assets.synMap}
       challenge={challenge}
     />
   )

@@ -126,14 +126,3 @@ const DRUGS = `
 export const BLOCKED = new Set(
   [SLURS, PROFANITY, SEXUAL, DEROGATORY, VIOLENCE, DRUGS].join(' ').trim().split(/\s+/),
 )
-
-/** Filter a synonym map so no blocked word appears as a key or a target. */
-export function cleanSynMap(synMap) {
-  const out = {}
-  for (const [word, syns] of Object.entries(synMap)) {
-    if (BLOCKED.has(word)) continue
-    const kept = syns.filter((s) => !BLOCKED.has(s))
-    if (kept.length) out[word] = kept // drop keys left with nothing to offer
-  }
-  return out
-}

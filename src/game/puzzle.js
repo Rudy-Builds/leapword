@@ -30,4 +30,11 @@ export function puzzleFromPath(line, { leaps }) {
 }
 
 // Move cap = par + 4 (streak-breaking threshold from the design doc).
+//
+// Note what it does NOT do: rescue a player with no legal move. The cap only
+// advances when a move lands, so someone stranded on a one-way word (ALSO's only
+// neighbour in the whole dictionary is ALTO, and 136 other typeable words are
+// the same shape) never burns it down. Give up is the exit for that — see
+// GiveUpButton — and it is the only reason a run can end unsolved with moves
+// still on the clock.
 export const moveCapFor = (par) => par + 4

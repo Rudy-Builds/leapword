@@ -481,6 +481,36 @@ html, body {
 }
 .result-reopen:hover { color: var(--ink); border-color: var(--accent); }
 
+/* ---------- Give up ---------- */
+/* Quieter than .result-reopen: borderless until armed. Sits under the leap
+   panel, so it must not compete with it — the exit should be findable, not
+   inviting. */
+.giveup {
+  appearance: none;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.giveup:hover { color: var(--ink); }
+.giveup-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.giveup-ask { font-size: 13px; color: var(--muted); text-align: center; }
+.giveup-actions { display: flex; gap: 8px; }
+/* The destructive half of the pair carries the weight, so the two choices can't
+   be told apart only by reading them. */
+.giveup-yes { border-color: var(--line); color: var(--bad); }
+.giveup-yes:hover { color: var(--bad); border-color: var(--bad); }
+
 /* ---------- Leap ---------- */
 .leap {
   display: flex;
@@ -510,36 +540,11 @@ html, body {
   color: var(--muted);
   font-weight: 500;
 }
-/* Capped: this is a footer child, and 8+ wrapped synonyms would eat the chain. */
-.leap-menu {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-  max-height: 30vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
-}
-.leap-option {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  background: color-mix(in srgb, var(--leap) 18%, var(--panel-2));
-  border: 1px solid color-mix(in srgb, var(--leap) 45%, var(--line));
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 0 14px;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 1px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.leap-option:hover { background: color-mix(in srgb, var(--leap) 30%, var(--panel-2)); }
+/* The leap is a spend-a-token confirm now, not a menu — .leap-menu/.leap-option
+   went with the synonym map. These two lay the confirm pair out. */
+.leap-actions { display: flex; gap: 8px; }
+.leap-ask { font-size: 13px; color: var(--muted); text-align: center; }
+.leap-yes { border-color: color-mix(in srgb, var(--leap) 60%, var(--line)); color: var(--leap); }
 .leap-empty, .leap-note { font-size: 13px; color: var(--muted); }
 
 /* Below the iPhone SE2/3 floor the goal row misses fitting beside the help

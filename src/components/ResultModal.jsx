@@ -22,13 +22,13 @@ function PathLine({ path }) {
   )
 }
 
-export function ResultModal({ status, stars, path, start, end, par, leapsUsed, solution, number, challenge = null, streak = {}, isArchive = false, today, onPlayToday, onOpenArchive, onClose, onHelp }) {
+export function ResultModal({ status, gaveUp = false, stars, path, start, end, par, leapsUsed, solution, number, challenge = null, streak = {}, isArchive = false, today, onPlayToday, onOpenArchive, onClose, onHelp }) {
   const won = status === 'won'
   const steps = path.length - 1
 
   // Note what is NOT passed: `solution`. buildShareText has no parameter for it,
   // so the par line revealed below cannot reach the clipboard. See share.js.
-  const shareable = buildShareText({ number, start, end, path, par, stars, status, streak: streak.current })
+  const shareable = buildShareText({ number, start, end, path, par, stars, status, streak: streak.current, leapsUsed })
 
   // The run is over, so the seal comes off: this is the only place the friend's
   // actual words render. Verdict from the player's side — see challenge.js for
@@ -58,7 +58,11 @@ export function ResultModal({ status, stars, path, start, end, par, leapsUsed, s
             (or an in-app browser eating height) Share would otherwise fall below
             the fold — the one action that carries the game forward. */}
         <div className="modal-body">
-          <h2 className="modal-title">{won ? 'Solved!' : 'Out of moves'}</h2>
+          {/* Two different losses and they should not read the same. The cap is
+              something that happened to you; giving up is something you chose,
+              and calling that "Out of moves" would be a lie about moves you
+              still had. */}
+          <h2 className="modal-title">{won ? 'Solved!' : gaveUp ? 'Gave up' : 'Out of moves'}</h2>
           <p className="modal-number">Leapword #{number}</p>
 
           <div className="stars" aria-label={`${stars} out of 3 stars`}>
@@ -72,7 +76,9 @@ export function ResultModal({ status, stars, path, start, end, par, leapsUsed, s
           <p className="modal-summary">
             {won
               ? `${start} → ${end} in ${steps} ${steps === 1 ? 'move' : 'moves'}`
-              : `Couldn’t reach ${end} in time`}
+              : gaveUp
+                ? `Stopped ${steps} ${steps === 1 ? 'move' : 'moves'} in, short of ${end}`
+                : `Couldn’t reach ${end} in time`}
             {' · '}par {par}
             {leapsUsed > 0 && ` · ${leapsUsed} leap${leapsUsed === 1 ? '' : 's'}`}
           </p>
@@ -129,8 +135,12 @@ export function ResultModal({ status, stars, path, start, end, par, leapsUsed, s
           )}
 
           {/* Losing used to be a dead end: zero stars, no explanation, and a replay
-              of the same puzzle. Show the line they were hunting for. */}
-          {!won && solution?.length > 0 && (
+              of the same puzzle. Show the line they were hunting for — but only
+              when the board beat them. Giving up is a choice, and handing over
+              the answer for it would make "give up" the fastest way to read the
+              solution. The share link still goes out, so they can hand the
+              puzzle to a friend without knowing the answer themselves. */}
+          {!won && !gaveUp && solution?.length > 0 && (
             <div className="modal-reveal">
               <span className="modal-reveal-label">The par line</span>
               <PathLine path={solution} />

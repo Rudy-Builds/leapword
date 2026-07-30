@@ -26,7 +26,8 @@ export const puzzleUrl = (number) => `${SHARE_URL}/${number}`
 
 // A win's link carries the ladder as a dare: the recipient sees your numbers up
 // front and your actual words only after they've played — see challenge.js.
-export const challengeUrl = (number, path) => `${puzzleUrl(number)}?c=${encodeChallenge(path)}`
+export const challengeUrl = (number, path, leapsUsed = 0) =>
+  `${puzzleUrl(number)}?c=${encodeChallenge(path, leapsUsed)}`
 
 // Real emoji, not the site's ★/⤳/· glyphs. Those are typographically nicer but
 // paste into Slack and iMessage as thin monochrome characters — the colour is
@@ -62,7 +63,7 @@ export function buildTileRow(path) {
  * @param {'won'|'lost'} r.status
  * @param {number} [r.streak]  current day streak; only ever printed on a win
  */
-export function buildShareText({ number, start, end, path, par, stars, status, streak }) {
+export function buildShareText({ number, start, end, path, par, stars, status, streak, leapsUsed = 0 }) {
   const won = status === 'won'
   const steps = path.length - 1
 
@@ -83,7 +84,7 @@ export function buildShareText({ number, start, end, path, par, stars, status, s
   // A win links as a challenge (the path rides sealed in the URL — the loop's
   // whole upgrade from boast to dare). A loss keeps the plain link: there's no
   // move count to beat, and encodeChallenge assumes a path that reached END.
-  const url = won ? challengeUrl(number, path) : puzzleUrl(number)
+  const url = won ? challengeUrl(number, path, leapsUsed) : puzzleUrl(number)
 
   return [`Leapword #${number} ${score}${flame}`, summary, buildTileRow(path), url].join('\n')
 }

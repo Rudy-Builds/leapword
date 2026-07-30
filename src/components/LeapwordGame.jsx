@@ -7,16 +7,17 @@ import { PuzzleHeader } from './PuzzleHeader.jsx'
 import { WordChain } from './WordChain.jsx'
 import { ActiveWordTiles } from './ActiveWordTiles.jsx'
 import { LeapPanel } from './LeapPanel.jsx'
+import { GiveUpButton } from './GiveUpButton.jsx'
 import { ResultModal } from './ResultModal.jsx'
 import { HelpModal } from './HelpModal.jsx'
 
-export function LeapwordGame({ puzzle, dictSet, synMap, number, isArchive = false, today, onPlayToday, onOpenArchive, challenge = null }) {
+export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today, onPlayToday, onOpenArchive, challenge = null }) {
   // Archive/challenge plays are ephemeral and off the streak: a null dayNumber
   // turns off both the day-scoped progress save (a refresh just restarts it,
   // harmless off-cycle) and the streak recording, while `number` still drives the
   // #N shown and shared. The daily passes its real number through unchanged.
   const storeDay = isArchive ? null : number
-  const game = useGame(puzzle, dictSet, synMap, { dayNumber: storeDay })
+  const game = useGame(puzzle, dictSet, { dayNumber: storeDay })
   // Reads the streak once on mount and records the result when a daily game ends.
   const streak = useStreak(storeDay, game.status)
 
@@ -139,10 +140,11 @@ export function LeapwordGame({ puzzle, dictSet, synMap, number, isArchive = fals
               message={game.message}
             />
             <LeapPanel
-              options={game.leapOptions}
+              target={game.leapTarget}
               leapsRemaining={game.leapsRemaining}
               onLeap={game.useLeap}
             />
+            <GiveUpButton onGiveUp={game.giveUp} />
           </div>
         )}
 
@@ -162,6 +164,7 @@ export function LeapwordGame({ puzzle, dictSet, synMap, number, isArchive = fals
       {!playing && resultOpen && (
         <ResultModal
           status={game.status}
+          gaveUp={game.gaveUp}
           stars={game.stars}
           path={game.path}
           start={puzzle.start}

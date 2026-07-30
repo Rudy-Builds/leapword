@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import { isLegalMove, computeStars } from '../game/rules.js'
-import { getSynonyms } from '../game/synonyms.js'
+import { nextRung } from '../game/leap.js'
 import { moveCapFor } from '../game/puzzle.js'
 import { defaultStorage } from './storage.js'
 
@@ -16,6 +16,10 @@ function freshState(puzzle) {
     leapsRemaining: puzzle.leaps,
     leapsUsed: 0,
     status: 'playing', // 'playing' | 'won' | 'lost'
+    // Which kind of loss, because they read completely differently to the player
+    // and 'lost' alone can't tell them apart: running the cap out is something
+    // that happened to you, giving up is something you chose.
+    gaveUp: false,
     stars: null,
     message: null,
   }
@@ -36,6 +40,7 @@ function makeInitialState({ puzzle, saved }) {
       leapsRemaining: saved.leapsRemaining,
       leapsUsed: saved.leapsUsed,
       status: saved.status,
+      gaveUp: saved.gaveUp ?? false, // absent in states saved before give-up shipped
       stars: saved.stars,
       message: null, // transient — never restored
     }
@@ -56,7 +61,7 @@ function reducer(state, action) {
       let stars = null
       if (word === end) {
         status = 'won'
-        stars = computeStars({ steps: movesUsed, par, leapsUsed, solvedWithinCap: true })
+        stars = computeStars({ steps: movesUsed, par, leapsUsed, solved: true })
       } else if (movesUsed >= moveCap) {
         status = 'lost'
         stars = 0
@@ -74,6 +79,11 @@ function reducer(state, action) {
         message: null,
       }
     }
+    // Needed even with the cap back, because the cap only counts moves that
+    // land: a player stranded on a one-way word (see puzzle.js) makes no moves,
+    // so it never runs out and their day would never resolve. This is the exit.
+    case 'GIVE_UP':
+      return { ...state, status: 'lost', gaveUp: true, stars: 0, message: null }
     case 'REJECT':
       return { ...state, message: action.message }
     case 'CLEAR_MESSAGE':
@@ -85,7 +95,7 @@ function reducer(state, action) {
   }
 }
 
-export function useGame(puzzle, dictSet, synMap, { dayNumber, storage = defaultStorage } = {}) {
+export function useGame(puzzle, dictSet, { dayNumber, storage = defaultStorage } = {}) {
   const [state, dispatch] = useReducer(
     reducer,
     { puzzle, saved: dayNumber == null ? null : storage.load(dayNumber) },
@@ -99,11 +109,15 @@ export function useGame(puzzle, dictSet, synMap, { dayNumber, storage = defaultS
     storage.save(dayNumber, state)
   }, [state, dayNumber, storage])
 
-  // Leap options offered for the current word (empty once tokens run out).
-  const leapOptions = useMemo(() => {
-    if (state.leapsRemaining <= 0) return []
-    return getSynonyms(state.current, synMap, { dictSet, path: state.path })
-  }, [state.current, state.path, state.leapsRemaining, synMap, dictSet])
+  // Where a leap would take you, or null when there is nowhere to go — no tokens
+  // left, or the only rung remaining is END, which a leap never hands over.
+  //
+  // Note this depends on the PATH, not the current word: the target is the rung
+  // after the furthest you've reached, so wandering doesn't move it.
+  const leapTarget = useMemo(() => {
+    if (state.leapsRemaining <= 0) return null
+    return nextRung(puzzle.solution, state.path)
+  }, [puzzle.solution, state.path, state.leapsRemaining])
 
   const submitWord = useCallback(
     (raw) => {
@@ -124,28 +138,38 @@ export function useGame(puzzle, dictSet, synMap, { dayNumber, storage = defaultS
     [state.status, state.current, state.path, dictSet, puzzle, moveCap]
   )
 
-  const useLeap = useCallback(
-    (target) => {
-      if (state.status !== 'playing') return
-      if (state.leapsRemaining <= 0) {
-        dispatch({ type: 'REJECT', message: 'No leap tokens left.' })
-        return
-      }
-      const word = String(target || '').trim().toUpperCase()
-      const check = isLegalMove(word, {
-        current: state.current,
-        path: state.path,
-        dictSet,
-        leapTargets: leapOptions,
-      })
-      if (!check.ok || !check.isLeap) {
-        dispatch({ type: 'REJECT', message: check.reason || 'That leap isn’t available.' })
-        return
-      }
-      dispatch({ type: 'APPLY_MOVE', word, isLeap: true, par: puzzle.par, moveCap, end: puzzle.end })
-    },
-    [state.status, state.current, state.path, state.leapsRemaining, leapOptions, dictSet, puzzle, moveCap]
-  )
+  // Takes no argument: there is exactly one place a leap can go, so the player
+  // is spending a token rather than picking from a menu.
+  const useLeap = useCallback(() => {
+    if (state.status !== 'playing') return
+    if (!leapTarget) {
+      dispatch({ type: 'REJECT', message: 'No leap available.' })
+      return
+    }
+    const check = isLegalMove(leapTarget, {
+      current: state.current,
+      path: state.path,
+      dictSet,
+      leapTargets: [leapTarget],
+    })
+    if (!check.ok || !check.isLeap) {
+      dispatch({ type: 'REJECT', message: check.reason || 'No leap available.' })
+      return
+    }
+    dispatch({
+      type: 'APPLY_MOVE',
+      word: leapTarget,
+      isLeap: true,
+      par: puzzle.par,
+      moveCap,
+      end: puzzle.end,
+    })
+  }, [state.status, state.current, state.path, leapTarget, dictSet, puzzle, moveCap])
+
+  const giveUp = useCallback(() => {
+    if (state.status !== 'playing') return
+    dispatch({ type: 'GIVE_UP' })
+  }, [state.status])
 
   const clearMessage = useCallback(() => dispatch({ type: 'CLEAR_MESSAGE' }), [])
 
@@ -162,9 +186,10 @@ export function useGame(puzzle, dictSet, synMap, { dayNumber, storage = defaultS
     ...state,
     moveCap,
     movesLeft: moveCap - state.movesUsed,
-    leapOptions,
+    leapTarget,
     submitWord,
     useLeap,
+    giveUp,
     clearMessage,
     reset,
   }
