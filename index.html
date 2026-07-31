@@ -10,6 +10,16 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta name="theme-color" content="#0f1220" />
+    <!-- site.webmanifest already asks for display:standalone, but iOS only
+         honours that from the manifest on 17.4+; older iPhones need this tag or
+         Add to Home Screen opens inside full Safari chrome and gives back ~100px
+         of the screen for nothing. Both are set, so neither path is the only one.
+         mobile-web-app-capable is the standards-track spelling of the same
+         thing; Chrome warns if only the apple- prefix is present. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Leapword" />
     <!-- Resolve the theme before first paint so there's no flash of the wrong
          palette. Mirrors src/state/useTheme.js: the stored value is a
          *preference* ('light' | 'dark' | absent = follow the device), while

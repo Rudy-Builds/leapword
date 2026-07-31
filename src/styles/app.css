@@ -379,6 +379,11 @@ html, body {
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  /* Load-bearing for the pad. .play centres its children, so without this
+     .active shrink-wraps to the tile row (~195px) and the pad's width:100%
+     resolves against THAT — a full keyboard squeezed into four tiles' worth of
+     column. The label and tiles stay centred either way. */
+  width: 100%;
 }
 /* One slot for both the prompt and the rejection message — they're never both
    meaningful, and two stacked 12px lines cost ~28px where it's scarcest. */
@@ -419,9 +424,23 @@ html, body {
   height: clamp(44px, 12.5vw, 50px);
   font-size: clamp(19px, 5.5vw, 22px);
 }
-.tile.input.caret {
+/* The armed position: the caret in typed mode, the tile the pad writes into on
+   touch. One treatment, because it answers the same question in both — "where
+   does the next letter land". */
+.tile.input.selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* Touch tiles are real buttons (they're the thing you tap to aim), so they need
+   the UA button styling stripped back off. */
+.tile.input.slot {
+  appearance: none;
+  padding: 0;
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .ghost-letter { color: var(--muted); opacity: 0.3; font-weight: 600; }
 .ghost-input {
@@ -507,6 +526,67 @@ html, body {
 .giveup-yes { border-color: var(--line); color: var(--bad); }
 .giveup-yes:hover { color: var(--bad); border-color: var(--bad); }
 
+/* ---------- Letter pad (touch input) ---------- */
+/* Full-bleed across the column, unlike everything else in .play, which centres
+   on the chain's axis. It's the floor of the layout — nothing renders below it.
+   Key height is a variable because it's the one dimension the height tiers
+   need to claw back on a small phone. */
+.pad {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* The pad is a target grid, not a document: a stray drag shouldn't select
+     letters or kick off iOS's callout. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.pad-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+/* Nine keys where the row above has ten. Half a key of padding each side keeps
+   the columns from drifting out of true with the row above. */
+.pad-row-2 { padding: 0 5%; }
+.pad-key {
+  appearance: none;
+  /* 1 1 0, not auto: every key takes an equal share of the row regardless of
+     glyph width, so the grid stays square-ish at any width. min-width:0 is what
+     lets them actually shrink below content size at 320px. */
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--pad-key-h, 46px);
+  /* Zero padding, not the UA default: appearance:none leaves button padding
+     behind on WebKit, which is enough to push "Enter" out of its own key. */
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: clamp(13px, 4vw, 16px);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* :active rather than a JS-held state — the press flash has to survive a
+   scroll-cancelled tap, and the browser already knows when that happened. */
+.pad-key:active { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.pad-enter {
+  flex: 1.7 1 0;
+  font-size: clamp(11px, 3.2vw, 13px);
+  letter-spacing: 0.5px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+/* Disabled means the draft still equals the word you're standing on — there is
+   no move to make yet. Dimming it is the only thing telling the player that
+   tapping a tile isn't a move on its own. */
+.pad-enter:disabled { opacity: 0.35; cursor: default; }
+
 /* ---------- Leap ---------- */
 .leap {
   display: flex;
@@ -562,17 +642,20 @@ html, body {
 .vp-short .header { padding: 10px 12px; }
 .vp-short .header-main { gap: 8px; }
 .vp-short .game { gap: 10px; }
+.vp-short { --pad-key-h: 40px; }
+/* The start word was briefly hidden here to fold the header onto one line. It
+   didn't: goal + stats measure ~357px against ~283px of middle column at 375,
+   so they wrap regardless and the row was given up for nothing. It's also the
+   wrong tier to have tried it on — vp-short is the one where the ladder still
+   scrolls, which makes the header the only place the start word survives. */
 
 /* The topbar is pure branding now, so hiding it costs nothing — the help button
    moved into .header, which never hides. */
 .vp-tiny .topbar { display: none; }
 .vp-tiny .header { padding: 6px 8px; grid-template-columns: 30px 1fr 30px; }
-.vp-tiny .header-main {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px 12px;
-}
+.vp-tiny { --pad-key-h: 34px; }
+.vp-tiny .pad { gap: 5px; }
+.vp-tiny .pad-row { gap: 5px; }
 .vp-tiny .help-btn { width: 30px; height: 30px; font-size: 14px; }
 .vp-tiny .minitile { width: 20px; height: 22px; font-size: 11px; border-radius: 4px; }
 .vp-tiny .arrow { font-size: 14px; }
@@ -588,6 +671,36 @@ html, body {
 /* NOTE: .active-label is deliberately NOT hidden here — it carries the
    rejection messages, which are the game's only feedback when a move is
    refused. Hiding it would blind the player exactly when the keyboard is up. */
+
+/* ---------- Landscape: side by side ---------- */
+/* A stacked column needs ~350px of height for header + ladder + pad, and a
+   phone on its side has ~340. Stacking there squeezed the ladder to nothing and
+   still clipped the bottom row of the pad off the screen. Landscape isn't short
+   of space, it's short of *height* — so the ladder and the input stop queueing
+   for the same axis and take a column each.
+ *
+ * A height media query is safe here, unlike the vp-* tiers: those exist because
+ * the iOS keyboard never touches the layout viewport. On touch there is no
+ * keyboard any more, and orientation is a fact about the device either way. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .game {
+    /* Definite height, not max-height: the 1fr track below needs something to
+       be a fraction OF, or the row collapses to its content and scrolls. */
+    height: var(--app-h, 100dvh);
+    max-width: 860px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 20px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+  .topbar { display: none; }
+  .header { grid-column: 1 / -1; }
+  /* Ladder left, input right — reading order and source order already agree, so
+     nothing needs reordering for the keyboard or a screen reader. */
+  .chain-scroll { grid-column: 1; grid-row: 2; }
+  .play { grid-column: 2; grid-row: 2; align-self: center; }
+}
 
 /* ---------- Modals ---------- */
 .modal-overlay {
@@ -811,6 +924,15 @@ html, body {
 .help-links { margin: 0; font-size: 12px; text-align: center; color: var(--muted); }
 .help-links a { color: var(--muted); }
 .help-links a:hover { color: var(--accent); }
+/* The give-up exit, below even the fine print. It keeps its own two-step
+   confirm, so the only thing this rule does is refuse to let it look like the
+   panel's main action — the solid "Got it" button directly beneath it is. */
+.help-giveup {
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
 
 /* ---------- Archive page ---------- */
 /* A full view in place of .game (Boot swaps them), so it mirrors .game's column:

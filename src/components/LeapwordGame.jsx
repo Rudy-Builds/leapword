@@ -7,7 +7,6 @@ import { PuzzleHeader } from './PuzzleHeader.jsx'
 import { WordChain } from './WordChain.jsx'
 import { ActiveWordTiles } from './ActiveWordTiles.jsx'
 import { LeapPanel } from './LeapPanel.jsx'
-import { GiveUpButton } from './GiveUpButton.jsx'
 import { ResultModal } from './ResultModal.jsx'
 import { HelpModal } from './HelpModal.jsx'
 
@@ -125,18 +124,21 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
 
         {playing && (
           <div className="play">
-            <ActiveWordTiles
-              current={game.current}
-              onSubmit={game.submitWord}
-              onEdit={game.clearMessage}
-              message={game.message}
-            />
+            {/* Leap sits above the input, not below it: on touch the input now
+                ends in a full-width letter pad anchored to the bottom edge, and
+                nothing may come after it. */}
             <LeapPanel
               target={game.leapTarget}
               leapsRemaining={game.leapsRemaining}
               onLeap={game.useLeap}
             />
-            <GiveUpButton onGiveUp={game.giveUp} />
+            <ActiveWordTiles
+              current={game.current}
+              onSubmit={game.submitWord}
+              onEdit={game.clearMessage}
+              message={game.message}
+              paused={helpOpen}
+            />
           </div>
         )}
 
@@ -184,6 +186,17 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
         <HelpModal
           par={puzzle.par}
           moveCap={game.moveCap}
+          // Give up used to hold 44px of the footer permanently for something a
+          // player does approximately never. It lives behind the ? now — which
+          // is the one control that never hides at any viewport height — so the
+          // exit is still always one tap from the board without standing on the
+          // board. Closing first, then surrendering, so the result modal isn't
+          // opening underneath a help modal that's about to close over it.
+          canGiveUp={playing}
+          onGiveUp={() => {
+            closeHelp()
+            game.giveUp()
+          }}
           onClose={closeHelp}
         />
       )}
