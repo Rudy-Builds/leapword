@@ -124,9 +124,9 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
 
         {playing && (
           <div className="play">
-            {/* Leap sits above the input, not below it: on touch the input now
-                ends in a full-width letter pad anchored to the bottom edge, and
-                nothing may come after it. */}
+            {/* Leap above the input, not below it. With Give up gone from this
+                footer the input is the last thing in the column, which is where
+                it wants to be — nearest the keyboard it summons. */}
             <LeapPanel
               target={game.leapTarget}
               leapsRemaining={game.leapsRemaining}
@@ -137,7 +137,6 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
               onSubmit={game.submitWord}
               onEdit={game.clearMessage}
               message={game.message}
-              paused={helpOpen}
             />
           </div>
         )}
