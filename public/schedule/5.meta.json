@@ -1,1 +1,1 @@
-{"generatorVersion":1,"epoch":"2026-07-16","cadence":"sunday","firstDay":18,"count":900,"window":30,"parPattern":[4,5,4,5,4,6,4],"enableSha":"3f1613022064","freqSha":"5351ff405b11","generatedAt":"2026-07-30T20:11:05.031Z"}
+{"generatorVersion":1,"epoch":"2026-07-16","cadence":"weekend","firstDay":17,"count":1768,"window":30,"pattern":[[4,0],[6,2]],"enableSha":"3f1613022064","freqSha":"5351ff405b11","generatedAt":"2026-07-30T23:59:45.389Z"}

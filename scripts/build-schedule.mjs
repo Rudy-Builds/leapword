@@ -62,44 +62,64 @@ const PAR_MAX = 6
 // this stream did not move a single already-published four-letter day. It now
 // skips one entry in seven, so its 6000 days of content spans ~19 years instead
 // of ~16. That is the whole cost.
+// Difficulty is (par, detour), not par alone.
+//
+// detour = par - (letters that differ between START and END). Since one move
+// changes one letter, you need at least that many moves; detour is how many
+// EXTRA the dictionary forces on you. At detour 0 every move can fix a wrong
+// letter and never touch a right one, so "make it look more like the target"
+// solves it with no lookahead. Each unit of detour is a move where that instinct
+// is actively wrong. Measured over the old schedule, 82% of days were detour 0
+// or 1 — which is why the game read as easy despite the par ramp.
+//
+// The two are NOT independent, which bounds what a pattern can ask for:
+// par >= (letters that differ) always, and two words one letter apart are
+// adjacent (par 1). So par 4 -> detour 0-2, par 5 -> detour 1-3, par 6 -> 2-4.
+//
+// Supply per (par, detour) is wildly uneven, and two cells look usable but are
+// not: four-letter par-4/detour-2 holds 322 puzzles (6 years) and par-5/detour-3
+// holds 90 (one year). The patterns below route around both.
 const STREAMS = {
   4: {
-    cadence: 'daily',
+    cadence: 'weekday', // Mon-Fri; Sat and Sun come from the five-letter stream
     firstDay: 1,
-    target: 6000, // ~16 years
-    parIndex: 'weekday',
+    target: 6000,
+    patternIndex: 'weekday',
     // Written MONDAY-FIRST and indexed by the puzzle's real weekday.
     //
-    // The obvious `PAR_PATTERN[dayIndex % 7]` is what shipped first and it is
-    // wrong: it anchors slot 0 to EPOCH's weekday, and EPOCH is a Thursday. That
-    // rotated the entire ramp four days — Monday drew the par-5, Tuesday drew the
-    // par-6, and Sunday drew the easiest slot in the week. Index by weekday and
-    // the pattern means what it reads like.
+    // The obvious `PATTERN[dayIndex % 7]` is what shipped first and it is wrong:
+    // it anchors slot 0 to EPOCH's weekday, and EPOCH is a Thursday. That rotated
+    // the whole ramp four days — Monday drew the par-5 and Sunday drew the
+    // easiest slot in the week.
     //
-    // Ascending into the weekend: three gentle days, two mid, a par-6 Saturday.
-    // The Sunday slot is never SERVED from this stream (from #18 on, Sundays come
-    // from the five-letter one) but the scheduler still spends a candidate on it,
-    // so it stays in the cheapest bucket rather than burning a scarce par-6.
-    //            Mon Tue Wed Thu Fri Sat Sun
-    parPattern: [4, 4, 4, 5, 5, 6, 4],
+    // Every step raises par or detour, so the week is monotone. Sat/Sun slots are
+    // never SERVED from this stream but the scheduler still spends a candidate on
+    // them, so they sit in the cheapest bucket rather than burning a scarce one.
+    //          Mon     Tue     Wed     Thu     Fri     [Sat]   [Sun]
+    pattern: [[4, 0], [4, 1], [5, 1], [5, 2], [6, 2], [4, 0], [4, 0]],
   },
   5: {
-    cadence: 'sunday',
-    // Puzzle #18 — Sunday 2026-08-02, the first Sunday after the feature shipped.
-    // Deliberately NOT #4 or #11, which are Sundays that were already published
-    // as four-letter puzzles. Moving them would rewrite days people have played
-    // and shared, which is the thing this file exists to prevent. Must never
-    // move: src/game/daily.js asserts against it.
-    firstDay: 18,
-    target: 900, // 900 Sundays ~ 17 years, so the stream outlives the daily one
-    // Every entry in this stream IS a Sunday, so there is no weekday to index by
-    // and `parIndex: 'weekday'` would be meaningless here — consecutive entries
-    // are consecutive Sundays, making this a 7-WEEK rotation rather than a 7-day
-    // ramp. Weighted easier than the daily pattern on purpose: five letters is
-    // already the difficulty spike, and stacking a par-6 pattern on top of it is
-    // how Sunday stops being the fun one. Four par-4s, two par-5s, one par-6.
-    parIndex: 'ordinal',
-    parPattern: [4, 5, 4, 5, 4, 6, 4],
+    cadence: 'weekend', // Saturdays and Sundays
+    // #17 — Saturday 2026-08-01. Nothing had ever been served from this stream
+    // when it moved here from #18 (its first Sunday was still in the future), so
+    // no published day changed. Must never move now: daily.js asserts on it.
+    firstDay: 17,
+    target: 1768, // 2 days/week ~ 17 years, so the stream outlives the daily one
+    // Consecutive entries alternate Saturday, Sunday, Saturday, Sunday — so this
+    // is a two-entry pattern indexed by parity, not a weekday lookup.
+    //
+    // Saturday resets to easy on purpose. The letter count going up is its own
+    // difficulty jump and its own signal that a new mode started, so the weekend
+    // is a second ramp rather than a continuation of the weekday one — the same
+    // reason a crossword's Sunday is the biggest grid but not the hardest.
+    //
+    // Sunday is the hardest thing the game can produce. Supply is the cost:
+    // five-letter par-6/detour-2 is only 268 puzzles, so strict adherence runs
+    // ~5 years before `take` starts relaxing detour within par 6 (694 total,
+    // ~13 years). It degrades rather than starving.
+    patternIndex: 'weekend',
+    //          Sat     Sun
+    pattern: [[4, 0], [6, 2]],
   },
 }
 
@@ -139,7 +159,12 @@ const LOOKAHEAD = 40000 // how far down the quality-sorted bucket to scan per da
 // days with 0 par-pattern fallbacks.
 const ALLOW_BLOCKED_INTERIORS = false
 
-const PAR_PATTERN = STREAM.parPattern
+const PATTERN = STREAM.pattern
+const hamming = (a, b) => {
+  let n = 0
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++
+  return n
+}
 
 const SCHEDULE_PATH = `public/schedule/${WORD_LEN}.json`
 const META_PATH = `public/schedule/${WORD_LEN}.meta.json`
@@ -227,7 +252,15 @@ for (const src of starts) {
     const worstRank = Math.max(...path.map(rankOf))
     const prevBest = byKey.get(key)
     if (!prevBest || worstRank < prevBest.worstRank) {
-      byKey.set(key, { start: src, end: dst, par: d, path, worstRank, clean })
+      byKey.set(key, {
+        start: src,
+        end: dst,
+        par: d,
+        detour: d - hamming(src, dst),
+        path,
+        worstRank,
+        clean,
+      })
     }
   }
 }
@@ -243,15 +276,20 @@ const hist = (xs) => xs.reduce((a, x) => ((a[x] = (a[x] || 0) + 1), a), {})
 console.log(`\n  raw ordered pairs:  ${rawPairs}`)
 console.log(`  canonical (deduped): ${candidates.length}`)
 console.log(`  by par: ${JSON.stringify(hist(candidates.map((c) => c.par)))}`)
+console.log(`  by (par,detour): ${JSON.stringify(hist(candidates.map((c) => `${c.par}d${c.detour}`)))}`)
 console.log(`  routes through a blocked interior: ${candidates.filter((c) => !c.clean).length}`)
 
 // ---------------------------------------------------------------------------
 // 2. Schedule.
 // ---------------------------------------------------------------------------
+// Bucketed by (par, detour) rather than par alone, because par alone does not
+// describe difficulty — see the note above STREAMS.
+const bucketKey = (par, detour) => `${par}:${detour}`
 const buckets = new Map()
 for (const c of candidates) {
-  if (!buckets.has(c.par)) buckets.set(c.par, { list: [], cursor: 0 })
-  buckets.get(c.par).list.push(c)
+  const k = bucketKey(c.par, c.detour)
+  if (!buckets.has(k)) buckets.set(k, { list: [], cursor: 0 })
+  buckets.get(k).list.push(c)
 }
 
 const existing = MODE === 'extend' ? await readJson(SCHEDULE_PATH) : null
@@ -298,8 +336,8 @@ kept.forEach((line, day) => {
 
 const fits = (c, day) => c.path.every((w) => day - (lastUsed.get(w) ?? -Infinity) > WINDOW)
 
-function take(par, day) {
-  const b = buckets.get(par)
+function take(par, detour, day) {
+  const b = buckets.get(bucketKey(par, detour))
   if (!b) return null
   while (b.cursor < b.list.length && b.list[b.cursor].used) b.cursor++
   for (let i = b.cursor, scanned = 0; i < b.list.length && scanned < LOOKAHEAD; i++, scanned++) {
@@ -315,24 +353,39 @@ function take(par, day) {
 }
 
 // `day` below is the 0-based array index, so the puzzle number is day + 1.
-const parSlotFor =
-  STREAM.parIndex === 'weekday'
+//
+// The weekday stream looks the pattern up by real weekday. The weekend stream's
+// entries alternate Saturday, Sunday, Saturday, Sunday, so parity IS the day.
+const patternSlotFor =
+  STREAM.patternIndex === 'weekday'
     ? (day) => mondayIndexOf(day + 1)
-    : (day) => day % PAR_PATTERN.length
+    : (day) => day % PATTERN.length
 
 const paths = [...kept]
 let starvedAt = null
 const fallbacks = []
 
 for (let day = kept.length; day < POOL_TARGET; day++) {
-  const wantPar = PAR_PATTERN[parSlotFor(day)]
-  let c = take(wantPar, day)
+  const [wantPar, wantDetour] = PATTERN[patternSlotFor(day)]
+  let c = take(wantPar, wantDetour, day)
   if (!c) {
-    // Difficulty ramp is a nice-to-have; a gap in the schedule is not. Take any
-    // par rather than starve, but record it — a lot of these means the pattern
-    // is over-ambitious for the pool.
-    for (const par of [4, 5, 6]) if ((c = take(par, day))) break
-    if (c) fallbacks.push({ day, wantPar, gotPar: c.par })
+    // Degrade, don't starve — and degrade in the order that preserves the most
+    // of the day's character. Detour first, holding par: a Sunday that slips
+    // from par-6/detour-2 to par-6/detour-1 is still the week's hardest day,
+    // where dropping to par 4 would not be. Only then give up par as well.
+    //
+    // This is load-bearing rather than theoretical: five-letter par-6/detour-2
+    // holds 268 puzzles, about five years of Sundays, so the relaxation starts
+    // firing long before the stream runs out.
+    for (const d of [wantDetour - 1, wantDetour + 1, wantDetour - 2, wantDetour + 2]) {
+      if (d >= 0 && (c = take(wantPar, d, day))) break
+    }
+    if (!c) {
+      outer: for (const par of [4, 5, 6]) {
+        for (let d = 0; d <= 4; d++) if ((c = take(par, d, day))) break outer
+      }
+    }
+    if (c) fallbacks.push({ day, want: `${wantPar}d${wantDetour}`, got: `${c.par}d${c.detour}` })
   }
   if (!c) {
     starvedAt = day
@@ -349,11 +402,21 @@ const yearOne = placed.slice(0, 365).filter(Boolean)
 const dirty = scheduled.filter((c) => !c.clean)
 console.log(`\nscheduled ${paths.length} days (${added} new)`)
 console.log(`  by par: ${JSON.stringify(hist(scheduled.map((c) => c.par)))}`)
+console.log(`  by detour: ${JSON.stringify(hist(scheduled.map((c) => c.detour)))}`)
 console.log(
   `  worstRank: max ${Math.max(...scheduled.map((c) => c.worstRank))} overall, ` +
     `${Math.max(...yearOne.map((c) => c.worstRank))} across year one`,
 )
-console.log(`  par-pattern fallbacks: ${fallbacks.length}`)
+console.log(`  pattern fallbacks: ${fallbacks.length}`)
+if (fallbacks.length) {
+  // Which day slipped matters more than how many did: a run of them on one
+  // weekday means that cell is under-supplied and the pattern wants rethinking.
+  const firstAt = fallbacks[0]
+  console.log(
+    `    first at entry ${firstAt.day} (wanted ${firstAt.want}, got ${firstAt.got})` +
+      `; by want: ${JSON.stringify(hist(fallbacks.map((f) => f.want)))}`,
+  )
+}
 console.log(
   `  blocked interiors: ${dirty.length} of ${scheduled.length} ` +
     `(${yearOne.filter((c) => !c.clean).length} in year one)` +
@@ -367,19 +430,22 @@ if (starvedAt !== null) {
 }
 
 console.log(
-  STREAM.parIndex === 'weekday'
-    ? `  PAR_PATTERN is weekday-indexed, Monday first (epoch ${EPOCH} is a ${weekdayOf(EPOCH)})`
-    : `  PAR_PATTERN is a ${PAR_PATTERN.length}-entry rotation over stream ordinal, not weekdays`,
+  STREAM.patternIndex === 'weekday'
+    ? `  pattern is weekday-indexed, Monday first (epoch ${EPOCH} is a ${weekdayOf(EPOCH)})`
+    : `  pattern alternates [Sat, Sun] by entry parity`,
 )
-if (STREAM.cadence === 'sunday') {
+if (STREAM.cadence === 'weekend') {
+  // Entry 0 is the first Saturday, entry 1 the Sunday after it, and so on — two
+  // entries per week. The assertion is the thing that keeps that arithmetic
+  // honest: get it wrong and every weekend day points at the wrong puzzle.
   const first = dayToDate(STREAM.firstDay)
-  const last = dayToDate(STREAM.firstDay + (paths.length - 1) * 7)
+  const lastDay = STREAM.firstDay + Math.floor((paths.length - 1) / 2) * 7 + ((paths.length - 1) % 2)
   console.log(
-    `  sunday stream: entry 0 is #${STREAM.firstDay} (${first}, a ${weekdayOf(first)}), ` +
-      `entry ${paths.length - 1} is ${last}`,
+    `  weekend stream: entry 0 is #${STREAM.firstDay} (${first}, a ${weekdayOf(first)}), ` +
+      `entry ${paths.length - 1} is ${dayToDate(lastDay)} (a ${weekdayOf(dayToDate(lastDay))})`,
   )
-  if (weekdayOf(first) !== 'Sunday') {
-    throw new Error(`firstDay #${STREAM.firstDay} is a ${weekdayOf(first)}, not a Sunday`)
+  if (weekdayOf(first) !== 'Saturday') {
+    throw new Error(`firstDay #${STREAM.firstDay} is a ${weekdayOf(first)}, not a Saturday`)
   }
 }
 
@@ -448,7 +514,7 @@ if (DRY) {
     firstDay: STREAM.firstDay,
     count: paths.length,
     window: WINDOW,
-    parPattern: PAR_PATTERN,
+    pattern: PATTERN,
     ...sources,
     generatedAt: new Date().toISOString(),
   })

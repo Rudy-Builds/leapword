@@ -40,7 +40,7 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
   // back to it — Share lives inside. Resets per puzzle via the key={number} remount.
   const [resultOpen, setResultOpen] = useState(true)
   const playing = game.status === 'playing'
-  const isSunday = isLongDay(number)
+  const isWeekend = isLongDay(number)
 
   // Marked on close rather than on open: dismissing it is the signal they've
   // read it, so refreshing with it still up shows it again. Idempotent, so a
@@ -98,7 +98,7 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
         {isArchive && !(playing && challenge) && (
           <div className="archive-bar">
             <span>
-              Leapword #{number} · a past {isSunday ? 'Sunday' : 'puzzle'}
+              Leapword #{number} · a past {isWeekend ? 'weekend' : 'puzzle'}
             </span>
             <button type="button" className="archive-today" onClick={onPlayToday}>
               Play today’s #{today} →
@@ -106,18 +106,10 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
           </div>
         )}
 
-        {/* Five letters instead of four is a big enough change to look like a
-            bug rather than a ritual, so Sunday says so out loud. Shown every
-            Sunday, not just the first: it's the same reason a crossword prints
-            "Sunday" on the Sunday grid — the point is that the day is an
-            occasion, and a one-time tooltip would make it an error message.
-            Last in the bar priority (challenge, then past-puzzle, then this):
-            phone rows are scarce and those two are why the visitor is here. */}
-        {isSunday && !isArchive && !(playing && challenge) && (
-          <div className="archive-bar sunday-bar">
-            <span>🗓️ Sundays are five letters</span>
-          </div>
-        )}
+        {/* There used to be a bar here announcing the longer weekend word. It
+            was a standing banner on two days in seven — noise on the board every
+            weekend to explain something the tile count already shows. The rule
+            lives in How to play instead, where the other rules are. */}
 
         <PuzzleHeader
           start={puzzle.start}

@@ -63,8 +63,8 @@ describe('shipped schedules', () => {
     })
   }
 
-  test('the everyday stream is a daily stream', () => {
-    assert.equal(schedules[SHORT_LEN].cadence, 'daily')
+  test('the everyday stream is a weekday stream', () => {
+    assert.equal(schedules[SHORT_LEN].cadence, 'weekday')
     assert.equal(schedules[SHORT_LEN].firstDay, 1)
   })
 
@@ -83,17 +83,20 @@ describe('shipped schedules', () => {
     }
   })
 
-  test('the Sunday stream declares its cadence and start day', () => {
-    assert.equal(schedules[LONG_LEN].cadence, 'sunday')
+  test('the weekend stream declares its cadence and start day', () => {
+    assert.equal(schedules[LONG_LEN].cadence, 'weekend')
     assert.equal(schedules[LONG_LEN].firstDay, FIRST_LONG_DAY)
   })
 
-  test('the Sunday stream outlives the everyday one', () => {
-    // Otherwise Sundays start wrapping to repeats while weekdays are still fresh.
-    const lastDay = FIRST_LONG_DAY + (schedules[LONG_LEN].paths.length - 1) * 7
+  test('the weekend stream outlives the everyday one', () => {
+    // Otherwise weekends start wrapping to repeats while weekdays are still
+    // fresh. Two entries per week now, so the last entry is (pairs * 7) days on
+    // from the first, plus one if it lands on the Sunday of its pair.
+    const entries = schedules[LONG_LEN].paths.length
+    const lastDay = FIRST_LONG_DAY + Math.floor((entries - 1) / 2) * 7 + ((entries - 1) % 2)
     assert.ok(
       lastDay >= schedules[SHORT_LEN].paths.length,
-      `Sundays run out at #${lastDay}, weekdays at #${schedules[SHORT_LEN].paths.length}`,
+      `weekends run out at #${lastDay}, weekdays at #${schedules[SHORT_LEN].paths.length}`,
     )
   })
 
@@ -132,12 +135,17 @@ describe('shipped schedules', () => {
     }
   })
 
-  // A spot-check that the wiring adds up end to end: the day the feature goes
-  // live must produce a five-letter puzzle, and the Sunday before it must not.
-  test('#18 is five letters and #11 is still four', () => {
+  // A spot-check that the wiring adds up end to end: the day the weekend goes
+  // long must produce a five-letter puzzle, the Sunday beside it too, and the
+  // last four-letter weekday before it must not.
+  test('#17 and #18 are five letters, #16 and #11 are still four', () => {
+    assert.equal(isLongDay(17), true)
     assert.equal(isLongDay(18), true)
     assert.equal(schedules[LONG_LEN].paths[0].split(' ')[0].length, 5)
+    assert.equal(schedules[LONG_LEN].paths[1].split(' ')[0].length, 5)
+    assert.equal(isLongDay(16), false)
     assert.equal(isLongDay(11), false)
+    assert.equal(schedules[SHORT_LEN].paths[15].split(' ')[0].length, 4)
     assert.equal(schedules[SHORT_LEN].paths[10].split(' ')[0].length, 4)
   })
 })

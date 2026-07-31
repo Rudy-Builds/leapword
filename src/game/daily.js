@@ -61,28 +61,33 @@ export function formatCountdown(ms) {
 }
 
 // ---------------------------------------------------------------------------
-// Puzzle shape: Sundays are longer.
+// Puzzle shape: weekends are longer.
 // ---------------------------------------------------------------------------
 
-/** Everyday puzzles. */
+/** Monday to Friday. */
 export const SHORT_LEN = 4
-/** Sundays, from FIRST_LONG_DAY on. */
+/** Saturdays and Sundays, from FIRST_LONG_DAY on. */
 export const LONG_LEN = 5
 
 /**
- * #18 — Sunday 2026-08-02, the first Sunday after five-letter Sundays shipped.
+ * #17 — Saturday 2026-08-01, the first day of the five-letter weekend.
  *
- * Sundays before it (#4 and #11) stay four letters forever. They were published,
- * played and shared as four-letter puzzles, and a rule that reached backwards
- * would turn every archive row and every screenshot of them into a lie — the
- * same reason build-schedule.mjs treats the schedule as append-only. So the rule
- * is "Sundays from #18", not "Sundays".
+ * Weekend days before it stay four letters forever. They were published, played
+ * and shared as four-letter puzzles, and a rule that reached backwards would
+ * turn every archive row and every screenshot of them into a lie — the same
+ * reason build-schedule.mjs treats the schedule as append-only. So the rule is
+ * "weekends from #17", not "weekends".
  *
- * Must never move once shipped, for exactly that reason: shifting it by one
- * Sunday re-points every five-letter day at a different puzzle. schedule/5.json
- * carries the same number as `firstDay` and Boot asserts the two agree.
+ * It moved here from #18 exactly once, when the weekend was still one day wide
+ * and nothing had ever been served from the five-letter stream — its first
+ * Sunday was still in the future, so no published day changed. That window is
+ * closed now.
+ *
+ * Must never move, for the reason above: shifting it re-points every five-letter
+ * day at a different puzzle. schedule/5.json carries the same number as
+ * `firstDay` and Boot asserts the two agree.
  */
-export const FIRST_LONG_DAY = 18
+export const FIRST_LONG_DAY = 17
 
 // Thursday (4). Derived, not written down, so it cannot drift from EPOCH_ISO.
 const EPOCH_WEEKDAY = new Date(EPOCH_UTC).getUTCDay()
@@ -92,9 +97,11 @@ export function weekdayForDay(n) {
   return (((n - 1 + EPOCH_WEEKDAY) % 7) + 7) % 7
 }
 
-/** Is #n one of the long Sunday puzzles? */
+/** Is #n one of the long weekend puzzles? 0 = Sunday, 6 = Saturday. */
 export function isLongDay(n) {
-  return n >= FIRST_LONG_DAY && weekdayForDay(n) === 0
+  if (n < FIRST_LONG_DAY) return false
+  const wd = weekdayForDay(n)
+  return wd === 6 || wd === 0
 }
 
 export function wordLengthForDay(n) {
@@ -110,12 +117,17 @@ export function wordLengthForDay(n) {
  * #12 is schedule/4.json entry 11 today, tomorrow and in 2043. It simply skips
  * an entry each Sunday now.
  *
- * The Sunday stream is indexed by Sunday ordinal: #18 is entry 0, #25 is entry
- * 1. `n` is a Sunday at or after FIRST_LONG_DAY here, so (n - FIRST_LONG_DAY) is
- * always a non-negative multiple of 7.
+ * The weekend stream is indexed by weekend ordinal — two entries per week,
+ * Saturday then Sunday: #17 is entry 0, #18 is entry 1, #24 is entry 2.
+ *
+ * FIRST_LONG_DAY is a Saturday, so `k` counts days from a Saturday and `k % 7`
+ * is 0 for Saturdays and 1 for Sundays — which is exactly the offset inside the
+ * week's pair. Anything else can't reach here, because isLongDay already said no.
  */
 export function streamIndexForDay(n) {
-  return isLongDay(n) ? (n - FIRST_LONG_DAY) / 7 : n - 1
+  if (!isLongDay(n)) return n - 1
+  const k = n - FIRST_LONG_DAY
+  return 2 * Math.floor(k / 7) + (k % 7)
 }
 
 /**

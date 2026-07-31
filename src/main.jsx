@@ -80,11 +80,11 @@ function checkSchedule(schedule, wordLength) {
   // where 4.json had no such field — 'daily' is the only thing it could have
   // meant, and a cached copy of it shouldn't fail the assertion below.
   const cadence = schedule.cadence ?? 'daily'
-  const expected = wordLength === LONG_LEN ? 'sunday' : 'daily'
+  const expected = wordLength === LONG_LEN ? 'weekend' : 'weekday'
   if (cadence !== expected) {
     throw new Error(`${where} is a '${cadence}' stream, app indexes it as '${expected}'`)
   }
-  if (cadence === 'sunday' && schedule.firstDay !== FIRST_LONG_DAY) {
+  if (cadence === 'weekend' && schedule.firstDay !== FIRST_LONG_DAY) {
     throw new Error(`${where} starts at #${schedule.firstDay}, app expects #${FIRST_LONG_DAY}`)
   }
   return schedule
