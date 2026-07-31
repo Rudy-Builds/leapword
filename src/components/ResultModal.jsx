@@ -1,16 +1,19 @@
 import React from 'react'
 import { compareToChallenge } from '../game/challenge.js'
-import { isOneLetterDiff } from '../game/rules.js'
 import { buildShareText } from '../game/share.js'
 import { Countdown } from './Countdown.jsx'
 import { ShareButton } from './ShareButton.jsx'
 
 // A path rendered inline, with ⤳ marking the steps that were leaps.
-function PathLine({ path }) {
+//
+// `leapSteps` is passed rather than derived — see buildTileRow in share.js. The
+// par line has none by definition: it's the answer, nobody played it.
+function PathLine({ path, leapSteps = [] }) {
+  const leapt = new Set(leapSteps)
   return (
     <div className="modal-chain">
       {path.map((word, i) => {
-        const leap = i > 0 && !isOneLetterDiff(path[i - 1], word)
+        const leap = leapt.has(i)
         return (
           <span className="modal-step" key={`${word}-${i}`}>
             {i > 0 && <span className="modal-sep">{leap ? '⤳' : '·'}</span>}
@@ -22,13 +25,13 @@ function PathLine({ path }) {
   )
 }
 
-export function ResultModal({ status, gaveUp = false, stars, path, start, end, par, leapsUsed, solution, number, challenge = null, streak = {}, isArchive = false, today, onPlayToday, onOpenArchive, onClose, onHelp }) {
+export function ResultModal({ status, gaveUp = false, stars, path, start, end, par, leapsUsed, leapSteps = [], solution, number, challenge = null, streak = {}, isArchive = false, today, onPlayToday, onOpenArchive, onClose, onHelp }) {
   const won = status === 'won'
   const steps = path.length - 1
 
   // Note what is NOT passed: `solution`. buildShareText has no parameter for it,
   // so the par line revealed below cannot reach the clipboard. See share.js.
-  const shareable = buildShareText({ number, start, end, path, par, stars, status, streak: streak.current, leapsUsed })
+  const shareable = buildShareText({ number, start, end, path, par, stars, status, streak: streak.current, leapSteps })
 
   // The run is over, so the seal comes off: this is the only place the friend's
   // actual words render. Verdict from the player's side — see challenge.js for
@@ -111,10 +114,10 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
                 Your path — {steps} {steps === 1 ? 'move' : 'moves'}
                 {leapsUsed > 0 && `, ${leapsUsed} ${leapsUsed === 1 ? 'leap' : 'leaps'}`}
               </span>
-              <PathLine path={path} />
+              <PathLine path={path} leapSteps={leapSteps} />
             </div>
           ) : (
-            <PathLine path={path} />
+            <PathLine path={path} leapSteps={leapSteps} />
           )}
 
           {/* The route-compare payoff: their words, unsealed only now that the
@@ -130,7 +133,7 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
                 {' · '}
                 {'⭐'.repeat(challenge.stars)}
               </span>
-              <PathLine path={challenge.path} />
+              <PathLine path={challenge.path} leapSteps={challenge.leapSteps} />
             </div>
           )}
 

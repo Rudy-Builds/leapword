@@ -21,12 +21,24 @@ describe('buildTileRow', () => {
     assert.equal(buildTileRow(KIND_GIVE), '🟩🟩🟩🟩')
   })
 
-  test('a leap — a step that is not a one-letter change — is purple', () => {
-    assert.equal(buildTileRow(['KIND', 'FIND', 'SEEK', 'SEEM']), '🟩🟪🟩')
+  // Positions, not geometry. A leap now lands on the next rung of the answer,
+  // which from the answer is a one-letter move — indistinguishable in the path
+  // from a typed one, which is exactly how every purple tile went missing.
+  test('a leapt-to step is purple', () => {
+    assert.equal(buildTileRow(['KIND', 'FIND', 'SEEK', 'SEEM'], [2]), '🟩🟪🟩')
+  })
+
+  test('a one-letter step is still purple when it was leapt to', () => {
+    assert.equal(buildTileRow(['KIND', 'FIND', 'FINE', 'FIVE'], [2]), '🟩🟪🟩')
+  })
+
+  test('a multi-letter step is green when it was not', () => {
+    // Geometry alone would have called this a leap. Only the record decides.
+    assert.equal(buildTileRow(['KIND', 'NICE', 'GOOD'], []), '🟩🟩')
   })
 
   test('all-leap path', () => {
-    assert.equal(buildTileRow(['KIND', 'NICE', 'GOOD']), '🟪🟪')
+    assert.equal(buildTileRow(['KIND', 'NICE', 'GOOD'], [1, 2]), '🟪🟪')
   })
 
   test('no moves yet', () => {
@@ -46,9 +58,10 @@ describe('buildShareText', () => {
 
   test('2 stars, one over par with a leap', () => {
     const path = ['KIND', 'FIND', 'FINE', 'MINE', 'GIVE', 'GIVE']
+    const leapSteps = [4, 5]
     assert.equal(
-      buildShareText({ ...base, stars: 2, status: 'won', path }),
-      `Leapword #42 ⭐⭐\nKIND → GIVE in 5 · par 4\n🟩🟩🟩🟪🟪\n${challengeUrl(42, path)}`,
+      buildShareText({ ...base, stars: 2, status: 'won', path, leapSteps }),
+      `Leapword #42 ⭐⭐\nKIND → GIVE in 5 · par 4\n🟩🟩🟩🟪🟪\n${challengeUrl(42, path, leapSteps)}`,
     )
   })
 

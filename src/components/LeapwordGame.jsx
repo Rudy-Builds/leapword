@@ -121,7 +121,7 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
           onHelp={() => setHelpOpen(true)}
         />
 
-        <WordChain path={game.path} end={puzzle.end} />
+        <WordChain path={game.path} end={puzzle.end} leapSteps={game.leapSteps} />
 
         {playing && (
           <div className="play">
@@ -163,6 +163,7 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
           end={puzzle.end}
           par={puzzle.par}
           leapsUsed={game.leapsUsed}
+          leapSteps={game.leapSteps}
           solution={puzzle.solution}
           number={number}
           challenge={challenge}

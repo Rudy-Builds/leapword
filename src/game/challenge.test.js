@@ -21,21 +21,21 @@ describe('encodeChallenge', () => {
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '')
-    assert.equal(encodeChallenge(KIND_GIVE, 0), expected)
-    assert.ok(!encodeChallenge(KIND_GIVE, 0).includes('='))
+    assert.equal(encodeChallenge(KIND_GIVE, []), expected)
+    assert.ok(!encodeChallenge(KIND_GIVE, []).includes('='))
   })
 })
 
 describe('decodeChallenge', () => {
   test('round-trips a clean par run, deriving steps, leaps and stars', () => {
     const c = decodeChallenge(encodeChallenge(KIND_GIVE), ctx)
-    assert.deepEqual(c, { path: KIND_GIVE, steps: 4, leapsUsed: 0, stars: 3 })
+    assert.deepEqual(c, { path: KIND_GIVE, steps: 4, leapsUsed: 0, leapSteps: [], stars: 3 })
   })
 
   test('a leap — a step that is not a one-letter change — is re-derived, and costs a star', () => {
     // FIND -> FIVE changes two letters: a leap. 3 steps beats par, minus one leap = 2★.
-    const c = decodeChallenge(encodeChallenge(['KIND', 'FIND', 'FIVE', 'GIVE'], 1), ctx)
-    assert.deepEqual(c, { path: ['KIND', 'FIND', 'FIVE', 'GIVE'], steps: 3, leapsUsed: 1, stars: 2 })
+    const c = decodeChallenge(encodeChallenge(['KIND', 'FIND', 'FIVE', 'GIVE'], [2]), ctx)
+    assert.deepEqual(c, { path: ['KIND', 'FIND', 'FIVE', 'GIVE'], steps: 3, leapsUsed: 1, leapSteps: [2], stars: 2 })
   })
 
   test('junk codes degrade to null, never throw', () => {
@@ -67,7 +67,7 @@ describe('decodeChallenge', () => {
   test('more leaps than the puzzle grants is a forgery, not a run', () => {
     // Three non-adjacent jumps against leaps: 2. Declared honestly and still a
     // forgery — the count can't exceed what the puzzle hands out.
-    assert.equal(decodeChallenge(encodeChallenge(['KIND', 'NICE', 'GOOD', 'GIVE'], 3), ctx), null)
+    assert.equal(decodeChallenge(encodeChallenge(['KIND', 'NICE', 'GOOD', 'GIVE'], [1, 2, 3]), ctx), null)
   })
 
   test('a run past the move cap could not have happened — the board locks first', () => {
@@ -120,13 +120,13 @@ describe('leap counts survive the round trip', () => {
     // Every step here is a one-letter swap, so nothing about the words reveals
     // that two of them were leaps. Before the count was carried, this decoded
     // as a spotless 3 ★.
-    const got = decodeChallenge(encodeChallenge(PATH, 2), ctx)
+    const got = decodeChallenge(encodeChallenge(PATH, [1, 2]), ctx)
     assert.equal(got.leapsUsed, 2)
     assert.equal(got.stars, 1)
   })
 
   test('a clean run still reads clean', () => {
-    const got = decodeChallenge(encodeChallenge(PATH, 0), ctx)
+    const got = decodeChallenge(encodeChallenge(PATH, []), ctx)
     assert.equal(got.leapsUsed, 0)
     assert.equal(got.stars, 3)
   })
@@ -143,11 +143,11 @@ describe('leap counts survive the round trip', () => {
     // HELP → WELL is a two-letter jump: it can only have been a leap, so a
     // declared count of 0 is a lie in the direction that flatters the sharer.
     const forged = ['HELP', 'WELL', 'WALL', 'WALK']
-    assert.equal(decodeChallenge(encodeChallenge(forged, 0), ctx), null)
-    assert.equal(decodeChallenge(encodeChallenge(forged, 1), ctx)?.leapsUsed, 1)
+    assert.equal(decodeChallenge(encodeChallenge(forged, []), ctx), null)
+    assert.equal(decodeChallenge(encodeChallenge(forged, [1]), ctx)?.leapsUsed, 1)
   })
 
   test('claiming more leaps than the puzzle grants is rejected', () => {
-    assert.equal(decodeChallenge(encodeChallenge(PATH, 3), ctx), null)
+    assert.equal(decodeChallenge(encodeChallenge(PATH, [1, 2, 3]), ctx), null)
   })
 })

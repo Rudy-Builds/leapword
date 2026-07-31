@@ -1,15 +1,17 @@
 import React, { useLayoutEffect, useRef } from 'react'
-import { isOneLetterDiff } from '../game/rules.js'
 
 const PIN_SLACK = 24 // px from the bottom that still counts as "following"
 
-// Vertical history of every word played. A step that isn't a one-letter change
-// from the previous word must have been a leap, so we mark it — no need to
-// thread per-step flags through state.
+// Vertical history of every word played, with ⤳ marking the steps that were
+// leapt to. Which those were has to be passed in: a leap lands on the next rung
+// of the answer, which from the answer is one letter — indistinguishable from a
+// move the player typed. This used to infer it and quietly stopped seeing any.
 //
 // This is also the layout's only scroll surface: it absorbs the space the
 // keyboard takes so the input and Leap button never get pushed off-screen.
-export function WordChain({ path, end }) {
+export function WordChain({ path, end, leapSteps = [] }) {
+  // Passed, not derived — see buildTileRow in share.js.
+  const leapt = new Set(leapSteps)
   const scrollRef = useRef(null)
   const pinnedRef = useRef(true)
   // Only a real gesture may unpin. The smooth follow-scroll fires 'scroll'
@@ -82,8 +84,10 @@ export function WordChain({ path, end }) {
     <div className="chain-scroll" ref={scrollRef}>
       <ol className="chain">
         {path.map((word, i) => {
+          // Still needed for the changed-letter highlight, which is a real diff
+          // against the previous word — unrelated to whether this step was leapt.
           const prev = i > 0 ? path[i - 1] : null
-          const leap = prev && !isOneLetterDiff(prev, word)
+          const leap = leapt.has(i)
           const isStart = i === 0
           const isCurrent = i === path.length - 1
           const isEnd = word === end

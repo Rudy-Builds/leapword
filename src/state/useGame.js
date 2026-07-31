@@ -15,6 +15,13 @@ function freshState(puzzle) {
     movesUsed: 0,
     leapsRemaining: puzzle.leaps,
     leapsUsed: 0,
+    // Which path positions were arrived at by leaping. Has to be recorded,
+    // because it can no longer be re-derived: a leap moves you to the next rung
+    // of the answer, and when you are already on the answer that is one letter
+    // away — identical in the path to a move you typed. Everything that renders
+    // a leap (the share card's purple tiles, the chain's ⤳) read geometry
+    // before, and silently stopped seeing leaps at all.
+    leapSteps: [],
     status: 'playing', // 'playing' | 'won' | 'lost'
     // Which kind of loss, because they read completely differently to the player
     // and 'lost' alone can't tell them apart: running the cap out is something
@@ -39,6 +46,8 @@ function makeInitialState({ puzzle, saved }) {
       movesUsed: saved.movesUsed,
       leapsRemaining: saved.leapsRemaining,
       leapsUsed: saved.leapsUsed,
+      leapSteps: saved.leapSteps ?? [], // absent in states saved before it was recorded
+
       status: saved.status,
       gaveUp: saved.gaveUp ?? false, // absent in states saved before give-up shipped
       stars: saved.stars,
@@ -56,6 +65,9 @@ function reducer(state, action) {
       const movesUsed = state.movesUsed + 1
       const leapsUsed = state.leapsUsed + (isLeap ? 1 : 0)
       const leapsRemaining = state.leapsRemaining - (isLeap ? 1 : 0)
+      // Index into `path` of the word just arrived at, so renderers can mark the
+      // step without inferring anything.
+      const leapSteps = isLeap ? [...state.leapSteps, path.length - 1] : state.leapSteps
 
       let status = 'playing'
       let stars = null
@@ -74,6 +86,7 @@ function reducer(state, action) {
         movesUsed,
         leapsUsed,
         leapsRemaining,
+        leapSteps,
         status,
         stars,
         message: null,

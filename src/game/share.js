@@ -14,7 +14,6 @@
 // readable at a glance, only revealed by the recipient's client after their own
 // run ends. See challenge.js for the seal and its contract.
 
-import { isOneLetterDiff } from './rules.js'
 import { encodeChallenge } from './challenge.js'
 
 export const SHARE_URL = 'https://leapword.app'
@@ -26,8 +25,8 @@ export const puzzleUrl = (number) => `${SHARE_URL}/${number}`
 
 // A win's link carries the ladder as a dare: the recipient sees your numbers up
 // front and your actual words only after they've played — see challenge.js.
-export const challengeUrl = (number, path, leapsUsed = 0) =>
-  `${puzzleUrl(number)}?c=${encodeChallenge(path, leapsUsed)}`
+export const challengeUrl = (number, path, leapSteps = []) =>
+  `${puzzleUrl(number)}?c=${encodeChallenge(path, leapSteps)}`
 
 // Real emoji, not the site's ★/⤳/· glyphs. Those are typographically nicer but
 // paste into Slack and iMessage as thin monochrome characters — the colour is
@@ -40,14 +39,17 @@ const NO_STAR = '☆'
 /**
  * One tile per move: 🟩 letter-swap, 🟪 leap.
  *
- * Leaps are re-derived rather than read from a flag, because no per-step leap
- * flag is persisted anywhere — WordChain and ResultModal's PathLine already do
- * exactly this. A leap is simply a step that isn't a one-letter change.
+ * `leapSteps` holds the path positions that were leapt to, and has to be passed
+ * rather than re-derived. This used to test `isOneLetterDiff` on each step,
+ * which was sound while a leap meant a synonym jump — always two or more
+ * letters different. A leap now moves you to the next rung of the answer, which
+ * from the answer is one letter, so every purple tile silently turned green.
  */
-export function buildTileRow(path) {
+export function buildTileRow(path, leapSteps = []) {
+  const leapt = new Set(leapSteps)
   let row = ''
   for (let i = 1; i < path.length; i++) {
-    row += isOneLetterDiff(path[i - 1], path[i]) ? SWAP_TILE : LEAP_TILE
+    row += leapt.has(i) ? LEAP_TILE : SWAP_TILE
   }
   return row
 }
@@ -63,7 +65,7 @@ export function buildTileRow(path) {
  * @param {'won'|'lost'} r.status
  * @param {number} [r.streak]  current day streak; only ever printed on a win
  */
-export function buildShareText({ number, start, end, path, par, stars, status, streak, leapsUsed = 0 }) {
+export function buildShareText({ number, start, end, path, par, stars, status, streak, leapSteps = [] }) {
   const won = status === 'won'
   const steps = path.length - 1
 
@@ -84,9 +86,9 @@ export function buildShareText({ number, start, end, path, par, stars, status, s
   // A win links as a challenge (the path rides sealed in the URL — the loop's
   // whole upgrade from boast to dare). A loss keeps the plain link: there's no
   // move count to beat, and encodeChallenge assumes a path that reached END.
-  const url = won ? challengeUrl(number, path, leapsUsed) : puzzleUrl(number)
+  const url = won ? challengeUrl(number, path, leapSteps) : puzzleUrl(number)
 
-  return [`Leapword #${number} ${score}${flame}`, summary, buildTileRow(path), url].join('\n')
+  return [`Leapword #${number} ${score}${flame}`, summary, buildTileRow(path, leapSteps), url].join('\n')
 }
 
 /**

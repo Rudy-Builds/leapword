@@ -75,6 +75,9 @@ export const defaultStorage = {
           movesUsed: state.movesUsed,
           leapsUsed: state.leapsUsed,
           leapsRemaining: state.leapsRemaining,
+          // Not derivable from `path` — see the note in useGame's freshState.
+          // Without it a reload loses every purple tile on the share card.
+          leapSteps: state.leapSteps,
           stars: state.stars,
           finishedAt: state.status === 'playing' ? null : Date.now(),
         }),
