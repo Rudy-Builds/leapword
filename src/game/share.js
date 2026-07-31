@@ -33,8 +33,11 @@ export const challengeUrl = (number, path, leapSteps = []) =>
 // the entire reason a Wordle grid travels.
 const SWAP_TILE = '🟩'
 const LEAP_TILE = '🟪'
+// Appended when the run ended without reaching END. It's an extra tile rather
+// than a recolouring of the last move: the greens are moves that happened and
+// stay true, and the red is the run stopping — "I got this far, then didn't".
+const UNSOLVED_TILE = '🟥'
 const STAR = '⭐'
-const NO_STAR = '☆'
 
 /**
  * One tile per move: 🟩 letter-swap, 🟪 leap.
@@ -45,13 +48,13 @@ const NO_STAR = '☆'
  * letters different. A leap now moves you to the next rung of the answer, which
  * from the answer is one letter, so every purple tile silently turned green.
  */
-export function buildTileRow(path, leapSteps = []) {
+export function buildTileRow(path, leapSteps = [], unsolved = false) {
   const leapt = new Set(leapSteps)
   let row = ''
   for (let i = 1; i < path.length; i++) {
     row += leapt.has(i) ? LEAP_TILE : SWAP_TILE
   }
-  return row
+  return unsolved ? row + UNSOLVED_TILE : row
 }
 
 /**
@@ -69,9 +72,11 @@ export function buildShareText({ number, start, end, path, par, stars, status, s
   const won = status === 'won'
   const steps = path.length - 1
 
-  // A loss shows three hollow stars rather than a fake completion — "☆☆☆" reads
-  // as a score of zero, where "✖" reads as an error.
-  const score = won ? STAR.repeat(stars) : NO_STAR.repeat(3)
+  // A loss prints no score at all. It used to show "☆☆☆", meaning zero — but
+  // hollow stars next to filled ones on someone else's card read as a rating
+  // rather than an absence, and people had to work out which they were looking
+  // at. The red tile on the row already says the run didn't land.
+  const score = won ? STAR.repeat(stars) : ''
 
   // The streak rides on line 1 (not its own line) to keep the card four lines —
   // and only on a win: a broken streak is not something you paste into a group
@@ -88,7 +93,11 @@ export function buildShareText({ number, start, end, path, par, stars, status, s
   // move count to beat, and encodeChallenge assumes a path that reached END.
   const url = won ? challengeUrl(number, path, leapSteps) : puzzleUrl(number)
 
-  return [`Leapword #${number} ${score}${flame}`, summary, buildTileRow(path, leapSteps), url].join('\n')
+  // `score` is empty on a loss, so the space before it has to go too or line 1
+  // ships with a trailing space into every paste.
+  const headline = `Leapword #${number}${score ? ` ${score}` : ''}${flame}`
+
+  return [headline, summary, buildTileRow(path, leapSteps, !won), url].join('\n')
 }
 
 /**

@@ -69,11 +69,19 @@ describe('buildShareText', () => {
     assert.match(buildShareText({ ...base, stars: 1, status: 'won' }), /^Leapword #42 ⭐\n/)
   })
 
-  test('a loss shows hollow stars and no move count — not a fake completion', () => {
+  test('a loss prints no score and closes the row in red', () => {
     const out = buildShareText({ ...base, stars: 0, status: 'lost' })
-    assert.equal(out, `Leapword #42 ☆☆☆\nKIND → GIVE · par 4\n🟩🟩🟩🟩\n${SHARE_URL}/42`)
+    assert.equal(out, `Leapword #42\nKIND → GIVE · par 4\n🟩🟩🟩🟩🟥\n${SHARE_URL}/42`)
     assert.doesNotMatch(out, /in \d/)
     assert.doesNotMatch(out, /⭐/)
+    // Hollow stars are gone entirely — they read as a rating, not an absence.
+    assert.doesNotMatch(out, /☆/)
+    // And no trailing space on line 1 now that the score can be empty.
+    assert.equal(out.split('\n')[0], 'Leapword #42')
+  })
+
+  test('a win never gets the red tile', () => {
+    assert.doesNotMatch(buildShareText({ ...base, stars: 3, status: 'won' }), /🟥/)
   })
 
   test('always four lines, always ends with the puzzle link', () => {
