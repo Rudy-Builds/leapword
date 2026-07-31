@@ -64,7 +64,7 @@ export function HelpModal({ par, moveCap, onClose }) {
                 makes sense next to the budget it comes out of. */}
             <div className="help-term">
               <dt>Leaps ⤳</dt>
-              <dd>Moves you to the next word of the answer. Costs a move and a star.</dd>
+              <dd>Moves you one step closer to the answer. Costs a move and a star.</dd>
             </div>
             {/* Two rules in one entry, both about the shape of the day rather
                 than how you play it. The weekend line was briefly its own term
