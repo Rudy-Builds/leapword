@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { isLongDay } from '../game/daily.js'
+import { LOW_MOVES } from '../game/puzzle.js'
 import { useGame } from '../state/useGame.js'
 import { useStreak } from '../state/useStreak.js'
 import { hasSeenHelp, markHelpSeen, recordCompletion } from '../state/storage.js'
@@ -7,6 +8,7 @@ import { PuzzleHeader } from './PuzzleHeader.jsx'
 import { WordChain } from './WordChain.jsx'
 import { ActiveWordTiles } from './ActiveWordTiles.jsx'
 import { LeapPanel } from './LeapPanel.jsx'
+import { GiveUpButton } from './GiveUpButton.jsx'
 import { ResultModal } from './ResultModal.jsx'
 import { HelpModal } from './HelpModal.jsx'
 
@@ -138,6 +140,21 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
               onEdit={game.clearMessage}
               message={game.message}
             />
+
+            {/* Give up earns its 44px back only once the run is in trouble.
+                It used to hold the bottom of the footer for the whole game —
+                the third row of a footer that was taking half the screen with
+                the keyboard up — to serve a decision almost nobody makes, and
+                never on move one. Same threshold that reddens the moves
+                fraction, so the board says "this is going badly" once, in two
+                places, rather than twice at different times.
+
+                It stays in How to play regardless, and that copy is the one
+                that matters: a player stranded on a one-way word never burns
+                the cap down (see puzzle.js), so movesLeft never falls and this
+                one never appears — which is exactly the case Give up exists
+                for. */}
+            {game.movesLeft <= LOW_MOVES && <GiveUpButton onGiveUp={game.giveUp} />}
           </div>
         )}
 
