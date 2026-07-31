@@ -60,21 +60,24 @@ export function HelpModal({ par, moveCap, onClose }) {
                 You get {moveCap}: par plus four. Run out and the puzzle locks.
               </dd>
             </div>
-            {/* Nowhere else does the game say this, and it's the rule people
-                collide with: there's no "play again", so losing looks broken
-                unless you already knew it was one attempt. */}
+            {/* Directly under Moves, because it spends one — the cost only
+                makes sense next to the budget it comes out of. */}
+            <div className="help-term">
+              <dt>Leaps ⤳</dt>
+              <dd>Moves you to the next word of the answer. Costs a move and a star.</dd>
+            </div>
+            {/* Two rules in one entry, both about the shape of the day rather
+                than how you play it. The weekend line was briefly its own term
+                and before that a banner on the board — a standing notice two
+                days in seven, to explain something the tile count already
+                shows. Nowhere else does the game say the rest of this, and it's
+                the rule people collide with: there's no "play again", so losing
+                looks broken unless you already knew it was one attempt. */}
             <div className="help-term">
               <dt>One a day</dt>
               <dd>
                 Everyone gets the same ladder, and you get one go at it. A new one lands
-                at midnight.
-              </dd>
-            </div>
-            <div className="help-term">
-              <dt>Leaps ⤳</dt>
-              <dd>
-                Moves you to the <b>next word of the answer</b>. Costs a move and a
-                star.
+                at midnight. Weekends are five letters.
               </dd>
             </div>
           </dl>
