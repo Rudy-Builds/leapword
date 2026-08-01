@@ -30,20 +30,23 @@ The rules fit on a napkin:
 
 - **Change exactly one letter** each move, landing on a real word.
 - **No repeats** — you can't reuse a word already on your ladder.
-- **Stuck?** Spend a **leap** 🟪 to jump straight to a *synonym* of your current word. You get **two per puzzle**, and each one costs you a star.
-- **Reach END** within **par + 4** moves or the puzzle locks as unsolved.
-- **Sundays are five letters.** Every other day is four. Same rules, longer words.
+- **Reach END** within **par + 4** moves, or the puzzle locks as unsolved.
+- **Stuck?** Spend a **leap** ⤳ and the game walks you one word further along the answer than you have ever been. **Two per puzzle**, and each costs a move *and* a star. It never hands over the last word — the win is always yours to type.
+- **Properly stuck?** ☠️ ends the run. It exists because a ladder can dead-end on a word with no legal neighbour, and the move cap only counts moves that land. Giving up doesn't show you the answer; only the board beating you earns the par line.
+- **Weekends are five letters**, weekdays four. Difficulty climbs Monday → Friday; Saturday resets to easy and Sunday is the hardest thing the game can build.
 
 Then you get a Wordle-style card to share — no spoilers, just your path:
 
 ```
-Leapword #12 ⭐⭐⭐ · 🔥7
+Leapword #12 ⭐⭐ · 🔥7
 MORE → GIVE in 4 · par 4
-🟩🟩🟩🟩
-https://leapword.app/12
+🟩🟪🟩🟩
+https://leapword.app/12?c=MTJNT1ZFTE9WRUxJVkVHSVZF
 ```
 
-🟩 a letter swap · 🟪 a leap · ⭐ your stars for the day.
+🟩 a letter swap · 🟪 a leap · 🟥 the run stopping short · ⭐ your stars for the day.
+
+That link is a **dare, not a boast**: a winning card carries your ladder *sealed* in the URL. Whoever opens it sees your numbers before they play, and your actual words only once their own run has ended.
 
 ### ⭐ Stars
 
@@ -52,7 +55,7 @@ https://leapword.app/12
 | Par, no leaps | ⭐⭐⭐ |
 | One over par, or par with one leap | ⭐⭐ |
 | Solved it at all | ⭐ |
-| Ran out of moves | ☆ (streak breaks) |
+| Ran out of moves, or gave up | none — the card prints no score, and the streak breaks |
 
 **One puzzle a day**, the same for everyone, resetting at your local midnight — with a countdown to the next one and an archive of every puzzle so far. Keep a streak going. 🔥
 
@@ -66,17 +69,20 @@ Leapword is a small, deliberately-built React app, and the code is meant to be r
 
 That single promise shapes a surprising amount of the design:
 
-- **The whole game is static — no backend.** The client ships a word list and a one-letter-diff check; that's all it needs to referee a move. No ladder graph, no BFS, and crucially **no solution** ever reaches the browser, so there's nothing to peek at in DevTools.
-- **Leaks are made structurally impossible, not politely discouraged.** [`src/game/share.js`](src/game/share.js) has no parameter for the solution — it *can't* print the par line, because the answer isn't in scope. The function signature is the guarantee; a `// don't leak this` comment would not be.
-- **The synonym menu ships with the game.** Leaps work offline from any word, and because the options are precomputed, no live API call can ever hint at which way is "toward the answer." ([`src/game/synonyms.js`](src/game/synonyms.js))
-- **The daily schedule is a committed artifact, not a build output.** ~6000 days (~16 years) of puzzles live in the repo. The generator is *append-only* by default and refuses to rewrite history without an explicit `--rebuild --force` — because rewriting day 42 would betray everyone who already played it.
+- **The whole game is static — no backend.** The client ships a word list and a one-letter-diff check; that's all it needs to referee a move. No ladder graph, no BFS, no server round-trip to play a move.
+- **A leap is a rung, not a synonym — and the data is why.** Leaps used to jump you to a synonym of your current word, chosen by *meaning*, when what a stuck player needs is chosen by *position*. Measured over a year of schedule: a synonym leap moved you **further from the target 74% of the time**, offered nothing at all on 532 answer-path words, and in 12 cases dropped you somewhere END couldn't be reached from at all. Your scarce resource usually made things worse. Now a leap puts you on the rung after the furthest you've reached — which provably can't strand you and can't send you backwards. ([`src/game/leap.js`](src/game/leap.js) carries the proof.)
+- **That means the answer ships to the client, and the repo says so rather than pretending otherwise.** A leap walks the solution and a loss reveals the par line, so the schedule is in the browser; [`public/schedule/4.json`](public/schedule/4.json) therefore opens with a note to whoever goes looking. Serving one day at a time from a Worker is the open piece of work here.
+- **The leak that actually travels is closed structurally, not politely.** [`src/game/share.js`](src/game/share.js) has no parameter for the solution — it *can't* print the par line, because the answer isn't in scope. The function signature is the guarantee; a `// don't leak this` comment would not be. The challenge code in a winning URL is sealed the same way: derived numbers before you play, words only after. ([`src/game/challenge.js`](src/game/challenge.js))
+- **The blocklist went from taste to load-bearing when leaps changed.** Blocked words were always fine as *interiors* — private to your own ladder, and banning them cost par its optimality. But a leap now puts an interior word in the player's mouth, which is the exact thing the blocklist exists to prevent. Interiors are gated too now; 197 future four-letter days and 54 weekend days had been routing through one.
+- **The daily schedule is a committed artifact, not a build output.** 6000 weekday puzzles and 1768 weekend ones live in the repo — about two decades of play. The generator is *append-only* by default and refuses to rewrite history without an explicit `--rebuild --force`, because rewriting day 42 would betray everyone who already played it.
+- **Difficulty is `(par, detour)`, not par alone.** `detour` is how many moves *beyond* the letters that differ between START and END the dictionary forces on you. At detour 0, "make it look more like the target" solves the puzzle with no lookahead — and 82% of the old schedule was detour 0 or 1, which is why the game read as easy despite a par ramp. The week now climbs both axes.
 - **Every move is saved, not just the result** — otherwise a mid-game refresh would be a free retry. ([`src/state/storage.js`](src/state/storage.js))
-- **Five-letter Sundays were added without moving a single published day.** They run as a *second stream* (`schedule/5.json`) indexed by Sunday ordinal, while the everyday stream keeps indexing by day number and simply skips a Sunday. So no four-letter day changed — and the rule starts at #18 rather than reaching back to #4 and #11, which had already been played as four-letter puzzles. Same promise, applied to a feature that could easily have broken it.
+- **Five-letter weekends were added without moving a single published day.** They run as a *second stream* (`schedule/5.json`) indexed by weekend ordinal, while the everyday stream keeps indexing by day number and simply skips Saturdays and Sundays. So no four-letter day changed — and the rule starts at #17 rather than reaching back over weekends that had already been played as four-letter puzzles. Same promise, applied to a feature that could easily have broken it.
 
 The game logic is pure and trivially testable, so you can read exactly how a move, a leap, and a star are decided:
 
 ```bash
-npm test    # share text, day maths, streaks, star scoring — no browser needed
+npm test    # share text, challenge codes, leaps, day maths, streaks, star scoring — no browser needed
 ```
 
 ### The map
@@ -84,16 +90,18 @@ npm test    # share text, day maths, streaks, star scoring — no browser needed
 | File | What lives there |
 |---|---|
 | [`src/game/rules.js`](src/game/rules.js) | Pure move validation + star scoring. The runtime needs only a word `Set` and a char-diff. |
-| [`src/game/synonyms.js`](src/game/synonyms.js) | Leap targets, from the bundled synonym map — so leaps work offline and never leak the solution. |
-| [`src/game/puzzle.js`](src/game/puzzle.js) | Hydrates a puzzle from one schedule line. `start`, `end`, `par`, `solution` are all *derived* from the path, so they can't disagree with it. |
-| [`src/game/daily.js`](src/game/daily.js) | Which puzzle is today, and how long it is. Local midnight (like Wordle) so the countdown reads true against your own clock; Sundays from #18 come from the five-letter stream. |
+| [`src/game/leap.js`](src/game/leap.js) | Where a leap takes you: the rung after the furthest you've reached — never backwards, never stranding, never the win itself. |
+| [`src/game/puzzle.js`](src/game/puzzle.js) | Hydrates a puzzle from one schedule line. `start`, `end`, `par`, `solution` are all *derived* from the path, so they can't disagree with it. Also the move cap (par + 4). |
+| [`src/game/daily.js`](src/game/daily.js) | Which puzzle is today, and how long it is. Local midnight (like Wordle) so the countdown reads true against your own clock; weekends from #17 come from the five-letter stream. |
 | [`src/game/share.js`](src/game/share.js) | The share card — the spoiler-proof one described above. |
-| [`src/state/useGame.js`](src/state/useGame.js) | Reducer holding path / moves / leaps / status. |
+| [`src/game/challenge.js`](src/game/challenge.js) | The sealed beat-my-path code a winning card carries in its URL, and the forgery checks on the way back in. |
+| [`src/game/streak.js`](src/game/streak.js) · [`completions.js`](src/game/completions.js) | The streak (pure, idempotent, resets on a loss) and the per-puzzle star log the archive reads. |
+| [`src/state/useGame.js`](src/state/useGame.js) | Reducer holding path / moves / leaps / status — including which steps were leapt to, since that can no longer be re-derived from the words. |
 | [`src/state/storage.js`](src/state/storage.js) | Today's progress, saved every move. |
-| [`src/components/`](src/components/) | Header, word chain, editable tiles, leap panel, result modal. |
-| [`scripts/build-schedule.mjs`](scripts/build-schedule.mjs) | Candidate search + the daily schedule. |
-| [`scripts/build-assets.mjs`](scripts/build-assets.mjs) | Dictionary + synonym map. |
-| [`scripts/blocklist.mjs`](scripts/blocklist.mjs) | Words a puzzle may not use — gates start/end and leaps only, so interiors stay free and par stays a true optimum. |
+| [`src/components/`](src/components/) | Header, word chain, editable tiles, the leap + give-up row, result modal. |
+| [`scripts/build-schedule.mjs`](scripts/build-schedule.mjs) | Candidate search, the `(par, detour)` weekly ramp, and the daily schedule. |
+| [`scripts/build-assets.mjs`](scripts/build-assets.mjs) | The dictionary. |
+| [`scripts/blocklist.mjs`](scripts/blocklist.mjs) | Words a puzzle may not use — start, end *and* interiors, now that a leap can hand an interior word to the player. |
 
 ---
 
@@ -109,17 +117,19 @@ npm test           # pure unit tests
 
 ```bash
 npm run build:schedule     # public/schedule/{4,5}.json — fast, 2 fetches + BFS
-npm run build:assets       # public/dict/ + public/syn/ — slow Datamuse sweep
+npm run build:assets       # public/dict/ — the typeable word list
 npm run build:icons        # public/og.png + apple-touch-icon.png (needs Chrome)
 ```
 
-Each script takes a word length, e.g. `node scripts/build-schedule.mjs 5`, and the length picks the stream: **4 is the everyday puzzle, 5 is Sundays.** Use `--dry-run` to see the stats without writing, and remember: the schedule is append-only history — `build-schedule` won't rewrite existing days without `--rebuild --force`.
+Each script takes a word length, e.g. `node scripts/build-schedule.mjs 5`, and the length picks the stream: **4 is the weekday puzzle, 5 is the weekend.** Use `--dry-run` to see the stats without writing, and remember: the schedule is append-only history — `build-schedule` won't rewrite existing days without `--rebuild --force`.
 
 ---
 
 ## 🗺 Roadmap
 
-Shipped: streaks, deep-linked share cards, a past-puzzles archive, five-letter Sundays. Deferred (and sketched out in the design doc): Supabase + anonymous auth, cross-device sync, and widening the length rotation past the current 4/5 split.
+Shipped: streaks, deep-linked share cards, sealed beat-my-path challenge links, a past-puzzles archive, five-letter weekends, the `(par, detour)` difficulty ramp, and leaps that actually help.
+
+Next: serving the schedule a day at a time from a Cloudflare Worker, so future answers stop riding along with today's. Deferred (and sketched out in the design doc): Supabase + anonymous auth, cross-device sync, and widening the length rotation past the current 4/5 split — five letters is the practical ceiling, since the ladder graph shatters into islands at six.
 
 ---
 
@@ -127,7 +137,8 @@ Shipped: streaks, deep-linked share cards, a past-puzzles archive, five-letter S
 
 - **[ENABLE](https://github.com/dolph/dictionary)** — the word list (`public/dict/`). Public domain, by Alan Beale.
 - **[FrequencyWords](https://github.com/hermitdave/FrequencyWords)** (MIT) — OpenSubtitles frequency ranks, used at build time to keep puzzles to words people actually know.
-- **[Datamuse API](https://www.datamuse.com/api/)** — synonyms for leaps (`public/syn/`), fetched offline at build time. Free for any use.
+
+The **[Datamuse API](https://www.datamuse.com/api/)** used to supply the synonym map behind leaps. Leaps walk the answer now, so the sweep, the map and the ~56KB it shipped are all gone.
 
 ---
 
