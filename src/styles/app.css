@@ -576,7 +576,6 @@ html, body {
 .leap-actions { display: flex; gap: 8px; }
 .leap-ask { font-size: 13px; color: var(--muted); text-align: center; }
 .leap-yes { border-color: color-mix(in srgb, var(--leap) 60%, var(--line)); color: var(--leap); }
-.leap-empty, .leap-note { font-size: 13px; color: var(--muted); }
 
 /* Below the iPhone SE2/3 floor the goal row misses fitting beside the help
    button by a hair and wraps, stranding the arrow at the end of a line. Buy the
@@ -621,7 +620,6 @@ html, body {
 .vp-tiny .header-stats b { font-size: 12px; }
 .vp-tiny .chain { gap: 4px; }
 .vp-tiny .game { gap: 8px; }
-.vp-tiny .leap-note { display: none; }
 /* NOTE: .active-label is deliberately NOT hidden here — it carries the
    rejection messages, which are the game's only feedback when a move is
    refused. Hiding it would blind the player exactly when the keyboard is up. */

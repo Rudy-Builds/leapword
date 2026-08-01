@@ -14,13 +14,12 @@ import React from 'react'
 // The armed state is owned by the board, not by this component: Give up shares
 // the row, and two confirms open at once would each be trying to hold it.
 export function LeapPanel({ target, leapsRemaining, onLeap, armed, onArm, onDisarm }) {
-  const spent = leapsRemaining <= 0
-  // Null target with tokens in hand means the only rung left is the end word.
-  // The copy stays vague on purpose: "you're one move away" is information the
-  // player should be reading off the board, not off a disabled button.
-  const disabled = spent || !target
+  // Nothing left to spend, or nowhere to spend it: a null target with tokens in
+  // hand means the only rung remaining is the end word, which a leap never hands
+  // over. Both dead ends now answer on press instead of in a standing label.
+  const available = leapsRemaining > 0 && !!target
 
-  if (armed && !disabled) {
+  if (armed) {
     return (
       <div className="leap confirming">
         <span className="leap-ask">Spend a leap? It moves you one word along.</span>
@@ -43,17 +42,20 @@ export function LeapPanel({ target, leapsRemaining, onLeap, armed, onArm, onDisa
     )
   }
 
-  // The remaining count used to ride along here as "2 left". The header already
-  // carries "2 leaps ⤳" and never scrolls away, so this was the same number
-  // twice on a screen with no room for it once.
+  // Two things used to live here and both were the board repeating itself: the
+  // remaining count as "2 left", and a note under a greyed-out button saying why
+  // it was grey. The header already carries "2 leaps ⤳" and never scrolls away.
+  //
+  // So the button never disables. Pressing it when there's nothing to spend
+  // routes straight to onLeap, which rejects and puts the reason in the message
+  // slot the rejected-word feedback already owns — an answer when it's asked
+  // for, rather than a standing line of chrome. A dead control couldn't have
+  // given that answer anyway; it only ever said "no", never why.
   return (
     <div className="leap">
-      <button className="leap-toggle" type="button" disabled={disabled} onClick={onArm}>
+      <button className="leap-toggle" type="button" onClick={available ? onArm : onLeap}>
         ⤳ Leap
       </button>
-      {disabled && (
-        <div className="leap-note">{spent ? 'Out of leap tokens.' : 'No leap available.'}</div>
-      )}
     </div>
   )
 }

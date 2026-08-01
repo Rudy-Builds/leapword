@@ -155,6 +155,14 @@ export function useGame(puzzle, dictSet, { dayNumber, storage = defaultStorage }
   // is spending a token rather than picking from a menu.
   const useLeap = useCallback(() => {
     if (state.status !== 'playing') return
+    // Two distinct dead ends, and the button no longer disables — pressing it is
+    // how a player finds out — so they have to say different things. Spent is
+    // permanent for the run; no target means the only rung left is END, which a
+    // leap never hands over, and that one can be true with tokens still in hand.
+    if (state.leapsRemaining <= 0) {
+      dispatch({ type: 'REJECT', message: 'Out of leap tokens.' })
+      return
+    }
     if (!leapTarget) {
       dispatch({ type: 'REJECT', message: 'No leap available.' })
       return
