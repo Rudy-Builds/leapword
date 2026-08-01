@@ -1,6 +1,5 @@
 import React from 'react'
 import { EXAMPLE_LADDER as EXAMPLE } from '../game/example.js'
-import { GiveUpButton } from './GiveUpButton.jsx'
 
 // This ladder must never be a real puzzle — see src/game/example.js. Each step
 // changes exactly one letter, same as the real rules.
@@ -12,7 +11,7 @@ function changedIndex(prev, word) {
   return -1
 }
 
-export function HelpModal({ par, moveCap, canGiveUp = false, onGiveUp, onClose }) {
+export function HelpModal({ par, moveCap, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -115,15 +114,6 @@ export function HelpModal({ par, moveCap, canGiveUp = false, onGiveUp, onClose }
             <span aria-hidden="true"> · </span>
             <a href="/terms">Terms</a>
           </p>
-
-          {/* The exit, rehoused from the board. Last thing in the panel and
-              still behind its own two-step confirm: findable by anyone who goes
-              looking, never in the way of anyone who isn't. */}
-          {canGiveUp && (
-            <div className="help-giveup">
-              <GiveUpButton onGiveUp={onGiveUp} />
-            </div>
-          )}
         </div>
 
         <button className="submit" type="button" onClick={onClose}>

@@ -1,5 +1,4 @@
 import React from 'react'
-import { LOW_MOVES } from '../game/puzzle.js'
 import { ThemeToggle } from './ThemeToggle.jsx'
 
 // Mini tile row used for the start/end words in the header.
@@ -18,7 +17,7 @@ function MiniWord({ word, tone }) {
 export function PuzzleHeader({ start, end, par, movesUsed, moveCap, leapsRemaining, onHelp }) {
   // "1/8 moves" reads like a progress bar, but the cap ends the run. Rather than
   // spend words saying so, the fraction goes red as it runs out.
-  const low = moveCap - movesUsed <= LOW_MOVES
+  const low = moveCap - movesUsed <= 2
 
   return (
     <div className="header">

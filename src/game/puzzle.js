@@ -38,9 +38,3 @@ export function puzzleFromPath(line, { leaps }) {
 // GiveUpButton — and it is the only reason a run can end unsolved with moves
 // still on the clock.
 export const moveCapFor = (par) => par + 4
-
-// How few moves left counts as running out. Two things key off it — the header
-// reddens the fraction, and Give up surfaces on the board — and they're the same
-// claim about the same run, so they read it from one place rather than each
-// carrying their own 2 and drifting apart later.
-export const LOW_MOVES = 2

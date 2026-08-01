@@ -1,26 +1,32 @@
-import React, { useState } from 'react'
+import React from 'react'
 
 // Surrender, behind a confirm.
 //
-// It has to exist at all because there is no move cap (see puzzle.js): reaching
-// END is otherwise the only terminal state, so without this a stuck player's day
-// never resolves — no result, no answer, no countdown to tomorrow.
+// It has to exist at all because the move cap only counts moves that LAND: a
+// player stranded on a one-way word (see puzzle.js) makes no moves, so the cap
+// never burns down and their day would otherwise never resolve. This is the
+// exit, and it's the only way a run ends unsolved with moves still on the clock.
 //
-// It also has to be hard to hit by accident, which is the whole reason for the
-// two-step. One tap arms it, a second confirms; anything else disarms. A player
-// pressing it is ending a run they can't undo, and unlike every other control
-// here that decision isn't recoverable by playing on.
+// A skull rather than the words "Give up", because it shares a row with Leap now
+// instead of holding a footer row of its own — which is what let it come back to
+// the board permanently rather than appearing only once the cap got close. The
+// label lives in aria-label/title, since an emoji is not a name.
 //
-// Deliberately quiet — the same ghost treatment as "See result", not the solid
-// fill Share gets. It's an exit, and an exit should never look like the thing to
-// do next.
-export function GiveUpButton({ onGiveUp }) {
-  const [armed, setArmed] = useState(false)
-
+// Still two-step, and that's the whole point of it being small: one tap arms,
+// a second confirms. A player pressing this is ending a run they can't undo, and
+// unlike every other control here that decision isn't recoverable by playing on.
+// Armed state is owned by the board — see LeapPanel for why.
+export function GiveUpButton({ onGiveUp, armed, onArm, onDisarm }) {
   if (!armed) {
     return (
-      <button className="giveup" type="button" onClick={() => setArmed(true)}>
-        Give up
+      <button
+        className="giveup-icon"
+        type="button"
+        aria-label="Give up"
+        title="Give up"
+        onClick={onArm}
+      >
+        <span aria-hidden="true">☠️</span>
       </button>
     )
   }
@@ -35,7 +41,7 @@ export function GiveUpButton({ onGiveUp }) {
         <button className="giveup giveup-yes" type="button" onClick={onGiveUp}>
           Give up
         </button>
-        <button className="giveup" type="button" onClick={() => setArmed(false)}>
+        <button className="giveup" type="button" onClick={onDisarm}>
           Keep playing
         </button>
       </div>

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { isLongDay } from '../game/daily.js'
-import { LOW_MOVES } from '../game/puzzle.js'
 import { useGame } from '../state/useGame.js'
 import { useStreak } from '../state/useStreak.js'
 import { hasSeenHelp, markHelpSeen, recordCompletion } from '../state/storage.js'
@@ -31,6 +30,12 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
       recordCompletion(number, game.stars ?? 0)
     }
   }, [game.status, game.stars, number])
+
+  // Any landed move (typed or leapt) disarms. A confirm is a question about the
+  // word you're standing on; once you've moved, it's asking about the wrong one.
+  useEffect(() => {
+    setArmed(null)
+  }, [game.path.length])
   // The rules used to be opt-in behind a button no first-timer had a reason to
   // press. Lazy initialiser: hasSeenHelp touches localStorage, so it must not
   // run on every render. This component is keyed by day and remounts at
@@ -40,6 +45,9 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
   // finished board. Kept here (not in the modal) because the board needs a way
   // back to it — Share lives inside. Resets per puzzle via the key={number} remount.
   const [resultOpen, setResultOpen] = useState(true)
+  // Which of the two row controls is showing its confirm: null | 'leap' |
+  // 'giveup'. Lives here because they share a row — see the .actions block.
+  const [armed, setArmed] = useState(null)
   const playing = game.status === 'playing'
   const isWeekend = isLongDay(number)
 
@@ -126,35 +134,44 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
 
         {playing && (
           <div className="play">
-            {/* Leap above the input, not below it. With Give up gone from this
-                footer the input is the last thing in the column, which is where
-                it wants to be — nearest the keyboard it summons. */}
-            <LeapPanel
-              target={game.leapTarget}
-              leapsRemaining={game.leapsRemaining}
-              onLeap={game.useLeap}
-            />
+            {/* Both ways out of the current word, on one row. Give up cost a
+                whole footer row of its own before — 44px held all game for a
+                decision almost nobody makes — and beside Leap it costs the
+                width of a square. That's what let it back onto the board
+                permanently instead of surfacing only near the cap.
+
+                Only one may be armed: each replaces the row with its own
+                confirm, and two would be fighting over it. The board holds that
+                state rather than the buttons, and drops it after every move so
+                a confirm can't outlive the position it was asked about. */}
+            <div className="actions">
+              {armed !== 'giveup' && (
+                <LeapPanel
+                  target={game.leapTarget}
+                  leapsRemaining={game.leapsRemaining}
+                  onLeap={game.useLeap}
+                  armed={armed === 'leap'}
+                  onArm={() => setArmed('leap')}
+                  onDisarm={() => setArmed(null)}
+                />
+              )}
+              {armed !== 'leap' && (
+                <GiveUpButton
+                  onGiveUp={game.giveUp}
+                  armed={armed === 'giveup'}
+                  onArm={() => setArmed('giveup')}
+                  onDisarm={() => setArmed(null)}
+                />
+              )}
+            </div>
+
+            {/* Last in the column, nearest the keyboard it summons. */}
             <ActiveWordTiles
               current={game.current}
               onSubmit={game.submitWord}
               onEdit={game.clearMessage}
               message={game.message}
             />
-
-            {/* Give up earns its 44px back only once the run is in trouble.
-                It used to hold the bottom of the footer for the whole game —
-                the third row of a footer that was taking half the screen with
-                the keyboard up — to serve a decision almost nobody makes, and
-                never on move one. Same threshold that reddens the moves
-                fraction, so the board says "this is going badly" once, in two
-                places, rather than twice at different times.
-
-                It stays in How to play regardless, and that copy is the one
-                that matters: a player stranded on a one-way word never burns
-                the cap down (see puzzle.js), so movesLeft never falls and this
-                one never appears — which is exactly the case Give up exists
-                for. */}
-            {game.movesLeft <= LOW_MOVES && <GiveUpButton onGiveUp={game.giveUp} />}
           </div>
         )}
 
@@ -202,17 +219,6 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
         <HelpModal
           par={puzzle.par}
           moveCap={game.moveCap}
-          // Give up used to hold 44px of the footer permanently for something a
-          // player does approximately never. It lives behind the ? now — which
-          // is the one control that never hides at any viewport height — so the
-          // exit is still always one tap from the board without standing on the
-          // board. Closing first, then surrendering, so the result modal isn't
-          // opening underneath a help modal that's about to close over it.
-          canGiveUp={playing}
-          onGiveUp={() => {
-            closeHelp()
-            game.giveUp()
-          }}
           onClose={closeHelp}
         />
       )}

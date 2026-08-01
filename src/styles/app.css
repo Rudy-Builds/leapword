@@ -507,13 +507,53 @@ html, body {
 .giveup-yes { border-color: var(--line); color: var(--bad); }
 .giveup-yes:hover { color: var(--bad); border-color: var(--bad); }
 
-/* ---------- Leap ---------- */
+/* ---------- Leap + Give up row ---------- */
+/* The two ways out of the current word, sharing one row. Whichever is armed
+   swaps itself for its confirm and the other unmounts (see LeapwordGame), so
+   this only ever lays out one control or one confirm — never a confirm with a
+   stray button beside it. */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Square, so it reads as an icon rather than a second Leap. Muted until
+   touched: it's an exit, and an exit should never look like the thing to do
+   next. The red only shows up on the way to pressing it. */
+.giveup-icon {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  /* Emoji ignore `color`, so quietness has to come from opacity. Not lower than
+     this: hover never fires on a phone, so whatever is set here is what touch
+     players see for the whole game, and further down it stops reading as
+     "quiet" and starts reading as "disabled" — beside a Leap button that
+     genuinely does grey out when it's spent. */
+  opacity: 0.75;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+.giveup-icon:hover,
+.giveup-icon:focus-visible { opacity: 1; border-color: var(--bad); }
+
 .leap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: 100%;
 }
 .leap-toggle {
   display: inline-flex;
@@ -531,11 +571,6 @@ html, body {
   touch-action: manipulation;
 }
 .leap-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
-.leap-count {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 500;
-}
 /* The leap is a spend-a-token confirm now, not a menu — .leap-menu/.leap-option
    went with the synonym map. These two lay the confirm pair out. */
 .leap-actions { display: flex; gap: 8px; }
@@ -847,15 +882,6 @@ html, body {
 .help-links { margin: 0; font-size: 12px; text-align: center; color: var(--muted); }
 .help-links a { color: var(--muted); }
 .help-links a:hover { color: var(--accent); }
-/* The give-up exit, below even the fine print. It keeps its own two-step
-   confirm, so the only thing this rule does is refuse to let it look like the
-   panel's main action — the solid "Got it" button directly beneath it is. */
-.help-giveup {
-  display: flex;
-  justify-content: center;
-  border-top: 1px solid var(--line);
-  padding-top: 8px;
-}
 
 /* ---------- Archive page ---------- */
 /* A full view in place of .game (Boot swaps them), so it mirrors .game's column:
