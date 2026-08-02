@@ -34,7 +34,7 @@ export function GiveUpButton({ onGiveUp, armed, onArm, onDisarm }) {
   return (
     <div className="giveup-confirm">
       {/* Says what it costs, not "are you sure". Deliberately does NOT promise
-          the answer: the par line is withheld on a give-up, so the old wording
+          the answer: the best line is withheld on a give-up, so the old wording
           ("show the answer and end today's run") was a straight lie. */}
       <span className="giveup-ask">End today’s run? You won’t see the answer.</span>
       <div className="giveup-actions">

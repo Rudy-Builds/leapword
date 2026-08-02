@@ -176,7 +176,7 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
         )}
 
         {/* Finished, with the result dismissed: the way back to it (Share, stars,
-            and the par line all live in the modal). Sits where the input was. */}
+            and the best line all live in the modal). Sits where the input was. */}
         {!playing && !resultOpen && (
           <div className="play">
             <button className="result-reopen" type="button" onClick={() => setResultOpen(true)}>

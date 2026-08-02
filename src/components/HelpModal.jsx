@@ -51,13 +51,13 @@ export function HelpModal({ par, moveCap, onClose }) {
 
           <dl className="help-terms">
             <div className="help-term">
-              <dt>Par</dt>
-              <dd>The fewest steps possible. This puzzle’s par is {par}.</dd>
+              <dt>Best</dt>
+              <dd>The fewest steps possible. This puzzle’s best is {par}.</dd>
             </div>
             <div className="help-term">
               <dt>Moves</dt>
               <dd>
-                You get {moveCap}: par plus four. Run out and the puzzle locks.
+                You get {moveCap}: best plus four. Run out and the puzzle locks.
               </dd>
             </div>
             {/* Directly under Moves, because it spends one — the cost only
@@ -85,11 +85,13 @@ export function HelpModal({ par, moveCap, onClose }) {
           <div className="help-stars">
             <div className="help-star-row">
               <span className="pips">★★★</span>
-              <span>par, no leaps</span>
+              <span>best, no leaps</span>
             </div>
             <div className="help-star-row">
               <span className="pips">★★</span>
-              <span>one over par, or one leap</span>
+              {/* "one over best" isn't English, so this states the rule
+                  directly rather than translating the old phrasing. */}
+              <span>one extra move, or one leap</span>
             </div>
             <div className="help-star-row">
               <span className="pips">★</span>

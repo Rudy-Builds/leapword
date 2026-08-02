@@ -7,7 +7,7 @@ import { ShareButton } from './ShareButton.jsx'
 // A path rendered inline, with ⤳ marking the steps that were leaps.
 //
 // `leapSteps` is passed rather than derived — see buildTileRow in share.js. The
-// par line has none by definition: it's the answer, nobody played it.
+// best line has none by definition: it's the answer, nobody played it.
 function PathLine({ path, leapSteps = [] }) {
   const leapt = new Set(leapSteps)
   return (
@@ -30,7 +30,7 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
   const steps = path.length - 1
 
   // Note what is NOT passed: `solution`. buildShareText has no parameter for it,
-  // so the par line revealed below cannot reach the clipboard. See share.js.
+  // so the best line revealed below cannot reach the clipboard. See share.js.
   const shareable = buildShareText({ number, start, end, path, par, stars, status, streak: streak.current, leapSteps })
 
   // The run is over, so the seal comes off: this is the only place the friend's
@@ -57,7 +57,7 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
         </button>
 
         {/* Same sticky-footer discipline as the help modal: the result scrolls,
-            the actions pin. A loss adds the par-line reveal, so on a short screen
+            the actions pin. A loss adds the best-line reveal, so on a short screen
             (or an in-app browser eating height) Share would otherwise fall below
             the fold — the one action that carries the game forward. */}
         <div className="modal-body">
@@ -82,7 +82,7 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
               : gaveUp
                 ? `Stopped ${steps} ${steps === 1 ? 'move' : 'moves'} in, short of ${end}`
                 : `Couldn’t reach ${end} in time`}
-            {' · '}par {par}
+            {' · '}best {par}
             {leapsUsed > 0 && ` · ${leapsUsed} leap${leapsUsed === 1 ? '' : 's'}`}
           </p>
 
@@ -121,7 +121,7 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
           )}
 
           {/* The route-compare payoff: their words, unsealed only now that the
-              player's own run is done. Same visual treatment as the par-line
+              player's own run is done. Same visual treatment as the best-line
               reveal below, tinted leap-purple so "theirs" never reads as "the
               answer". */}
           {challenge && (
@@ -145,7 +145,7 @@ export function ResultModal({ status, gaveUp = false, stars, path, start, end, p
               puzzle to a friend without knowing the answer themselves. */}
           {!won && !gaveUp && solution?.length > 0 && (
             <div className="modal-reveal">
-              <span className="modal-reveal-label">The par line</span>
+              <span className="modal-reveal-label">The best line</span>
               <PathLine path={solution} />
             </div>
           )}
