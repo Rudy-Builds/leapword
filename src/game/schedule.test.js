@@ -135,6 +135,86 @@ describe('shipped schedules', () => {
     }
   })
 
+  // The append-only promise, as an assertion instead of a convention.
+  //
+  // build-schedule.mjs can now redraw a schedule's FUTURE (--revise-from), which
+  // is what let the difficulty ramp move without disturbing anybody's history.
+  // Its own guard is a calendar check inside the generator, and that guard is
+  // fine but it is not enough on its own: it trusts the clock of whoever runs
+  // the script, and it leaves nothing behind in review.
+  //
+  // These entries need neither. Every one of them either has been served to
+  // players — each is somebody's shared card and somebody's streak — or was
+  // already committed to before the #40 boundary the ramp moved on. The list
+  // only ever grows. If a revision reaches back past this line, this fails in
+  // CI rather than in public.
+  const FROZEN_THROUGH_DAY = 40
+  const FROZEN = {
+    [SHORT_LEN]: [
+      'WHAT THAT THAN THEN THEM',
+      'MORE MOVE LOVE LIVE GIVE',
+      'CALM CALL FALL FELL FEEL FEET',
+      'WAIT WANT WENT SENT SEND',
+      'DARK PARK PART PAST LAST LIST',
+      'LOSE NOSE NONE NINE NICE NICK NECK',
+      'FIND KIND KING SING SONG',
+      'MIND MINE MIKE MAKE WAKE',
+      'COOL FOOL FOOD GOOD GOLD',
+      'REST BEST BEAT BEAR YEAR YEAH',
+      'KIDS KISS MISS MESS LESS',
+      'STOP SHOP SHIP SHIT SUIT QUIT',
+      'COME HOME HOLE HOLD HELD HEAD DEAD',
+      'CASE CARE CARD HARD HAND',
+      'HELP HELL WELL WALL WALK',
+      'FISH WISH WISE RISE ROSE ROLE ROLL',
+      'BLOW SLOW SHOW SHOT SHUT',
+      'WIND WILD WILL BILL BELL',
+      'PICK PACK BACK BANK BAND',
+      'FACE FACT FAST EAST EASY',
+      'GIFT LIFT LIFE LIKE LAKE CAKE',
+      'FIRM FIRE HIRE HERE HERO ZERO',
+      'LOOK LOCK ROCK RICK RICE RIDE HIDE',
+      'FULL FILL FILE FINE WINE',
+      'DIED DIES DOES GOES GODS',
+      'REAL READ LEAD LOAD LORD',
+      'GAVE SAVE SAKE JAKE JOKE',
+      'BOAT COAT COST CAST CASH WASH',
+      'MAIN MAIL TAIL TALL TALK TANK',
+      'POST MOST MUST BUST BUSY BURY JURY',
+      'HURT HUNT HUNG HANG BANG',
+      'THAN THEN THEE TREE FREE',
+      'FIVE LIVE LINE LANE LAND',
+      'CALM CALL FALL FELL FELT',
+      'WANT WENT SENT SEAT MEAT MEAN',
+      'DATA DATE DARE DARK MARK MASK',
+      'SUCH SUCK SICK NICK NICE NINE NONE',
+      'LAST LOST LOSE LOVE MOVE',
+      'MAKE MIKE MINE MIND KIND',
+    ],
+    [LONG_LEN]: [
+      'MOVED LOVED LIVED LIKED LIKES',
+      'THESE THOSE WHOSE WHOLE WHILE WHITE WRITE',
+      'LINES LIVES LOVES LOVER COVER',
+      'CHECK CHICK THICK TRICK TRACK TRACE GRACE',
+      'STOLE STORE SCORE SCARE SCARY',
+      'TEARS BEARS BEATS BOATS BOOTS BOOTH TOOTH',
+      'WALKS WALLS BALLS BILLS BILLY',
+      'STAYS STARS STARE SHARE SHORE SHORT SHOUT',
+    ],
+  }
+
+  test(`history before #${FROZEN_THROUGH_DAY} is frozen`, () => {
+    for (const len of [SHORT_LEN, LONG_LEN]) {
+      FROZEN[len].forEach((path, i) => {
+        assert.equal(
+          schedules[len].paths[i],
+          path,
+          `${len}.json entry ${i} moved — that day has already been played`,
+        )
+      })
+    }
+  })
+
   // A spot-check that the wiring adds up end to end: the day the weekend goes
   // long must produce a five-letter puzzle, the Sunday beside it too, and the
   // last four-letter weekday before it must not.

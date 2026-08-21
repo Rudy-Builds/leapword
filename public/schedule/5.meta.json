@@ -1,1 +1,1 @@
-{"generatorVersion":1,"epoch":"2026-07-16","cadence":"weekend","firstDay":17,"count":1768,"window":30,"pattern":[[4,0],[6,2]],"enableSha":"3f1613022064","freqSha":"5351ff405b11","generatedAt":"2026-07-30T23:59:45.389Z"}
+{"generatorVersion":2,"epoch":"2026-07-16","cadence":"weekend","firstDay":17,"count":1768,"window":30,"pattern":[[4,1],[6,2]],"revisions":[{"from":40,"preserved":8,"generatorVersion":2,"pattern":[[4,1],[6,2]],"at":"2026-08-21T20:10:49.968Z"}],"enableSha":"3f1613022064","freqSha":"5351ff405b11","generatedAt":"2026-08-21T20:10:49.968Z"}
