@@ -53,10 +53,12 @@ const FORCE = argv.includes('--force')
 const DRY = argv.includes('--dry-run')
 
 // v2: the weekly ramp moved up a detour and `relax` stopped reaching for the
-// easiest cell in the game when supply runs short. Both change which puzzle a
-// given slot draws, so a v1 prefix and a v2 suffix may only meet where
-// --revise-from puts the seam on purpose — never by appending.
-const GENERATOR_VERSION = 2
+// easiest cell in the game when supply runs short.
+// v3: the weekday par ceiling went to 7 and every weekday slot moved up a tier.
+// Each of these changes which puzzle a given slot draws, so an old prefix and a
+// new suffix may only meet where --revise-from puts the seam on purpose — never
+// by appending.
+const GENERATOR_VERSION = 3
 const EPOCH = '2026-07-16' // Leapword #1. Must never move.
 const LEAPS = 2
 
@@ -101,7 +103,6 @@ if (MODE === 'revise') {
 }
 
 const PAR_MIN = 4
-const PAR_MAX = 6
 
 // Two streams, and the split is forced rather than stylistic.
 //
@@ -132,16 +133,36 @@ const PAR_MAX = 6
 //
 // The two are NOT independent, which bounds what a pattern can ask for:
 // par >= (letters that differ) always, and two words one letter apart are
-// adjacent (par 1). So par 4 -> detour 0-2, par 5 -> detour 1-3, par 6 -> 2-4.
+// adjacent (par 1). So at four letters par 4 -> detour 0-2, par 5 -> 1-3,
+// par 6 -> 2-4, par 7 -> 3-5.
 //
-// Supply per (par, detour) is wildly uneven, and two cells look usable but are
-// not: four-letter par-4/detour-2 holds 322 puzzles (6 years) and par-5/detour-3
-// holds 90 (one year). The patterns below route around both.
+// Supply per (par, detour) is wildly uneven, and that unevenness — not the
+// pattern — is what decides how hard a week can get. A slot needs ~857 puzzles
+// to run 17 years without repeating itself, and at four letters only SIX cells
+// clear that bar:
+//
+//     4d0 17325   4d1 14672   5d1 24100   5d2 2807   6d2 8177   7d3 1439
+//
+// Every other cell is a rounding error by comparison: 4d2 holds 322, 6d3 327,
+// 5d3 90, 7d4 64, 8d4 185. So a five-day ramp that is strictly increasing AND
+// never runs dry has to be five of those six, which forces Monday to par 4 and
+// caps Friday at 7d3. Asking every weekday to be harder than that means
+// spending a scarce cell somewhere and accepting that it empties — see the
+// weekday pattern for which one, and why Thursday is the right place to spend
+// it.
+//
+// The binding constraint is COMMON_CUT, not the ladder graph. Raising the
+// routable vocabulary from 10k to 20k words turns nine cells past the bar
+// (4d2, 6d3 and 8d4 join) — but it also roughly doubles the rarity of the words
+// puzzles route through, from a median rarest word around rank 8000 to around
+// 16000. That is a trade about what counts as a fair puzzle, not a scheduling
+// decision, so it is left alone here.
 const STREAMS = {
   4: {
     cadence: 'weekday', // Mon-Fri; Sat and Sun come from the five-letter stream
     firstDay: 1,
     target: 6000,
+    parMax: 7, // Friday needs 7d3; nothing above it has the supply to be a slot
     patternIndex: 'weekday',
     // Written MONDAY-FIRST and indexed by the puzzle's real weekday.
     //
@@ -154,30 +175,39 @@ const STREAMS = {
     // detour — so the week is monotone and each day differs from the last in one
     // legible way.
     //
-    // The ramp used to open on [4, 0], and detour 0 is the one shape that needs
-    // no lookahead at all: every move can fix a wrong letter without disturbing a
-    // right one, so "make it look more like the target" simply solves it. That
-    // was the week's free day. It is gone — Monday is still the gentlest slot by
-    // a clear margin (par 4, one letter of misdirection) but it is a puzzle now,
-    // and NO served weekday draws detour 0 any more.
+    // EVERY day moved up from the ramp before this one, which was
+    // [4,1] [5,1] [5,2] [6,2] [6,3]. Monday leaves par 4 entirely, so there is
+    // no longer a four-letter par-4 weekday at all, and detour 0 — the shape
+    // that needs no lookahead, where every move can fix a wrong letter without
+    // disturbing a right one — appears on no served weekday.
     //
-    // Friday's [6, 3] deliberately outruns its supply: only 327 four-letter
-    // puzzles qualify, against 851 Fridays. `relax` covers the gap with [6, 4]
-    // (11 more) and then [6, 2] — exactly where Friday used to sit. Measured on
-    // the result: Fridays hold detour 3 or better until 2030-11-08, and 298 of
-    // the first decade's 516 of them clear detour 2. So the top of the week is a
-    // tier harder for the years that matter and decays into the old behaviour
-    // rather than starving.
+    // Four of the five days sit in cells that never run dry (see the supply
+    // table above STREAMS). Thursday is the one that does not, and it is the
+    // deliberate choice this ramp turns on.
     //
-    // Everything below Friday is comfortably supplied; [5, 2] is the tightest at
-    // 2807 against ~857 Wednesdays.
+    // Making all five days harder requires spending a scarce cell somewhere,
+    // because only six cells clear the ~857 a slot needs and a strictly
+    // increasing five-day ramp above [4, 1] would need five cells above it —
+    // there are four. Thursday's [6, 3] holds 327, about four years of
+    // Thursdays, after which `relax` walks it to [6, 4] (11 more) and then back
+    // to [6, 2]. Measured: the strict Mon->Fri ramp holds in 98-100% of weeks
+    // through 2030, 66% in year five, and decays from there to Thursday sitting
+    // level with Wednesday. Nothing ever gets EASIER than the ramp it replaced —
+    // Thursday's floor is [6, 2], which is exactly where Thursday used to be.
+    //
+    // Friday was the alternative place to spend it, and it is the wrong one.
+    // [8, 4] holds 185 and empties inside three months, and its fallbacks land
+    // in Thursday's [7, 3], so the two collide constantly: the strict ramp then
+    // holds only 37% of weeks against this ramp's 56%, and the words get rarer
+    // besides (median rarest word 8961 against 8049). A scarce cell is cheapest
+    // where the cell BELOW it is abundant, and [6, 2] is abundant.
     //
     // Sat/Sun slots are never SERVED from this stream, but the scheduler still
     // spends a candidate on them to keep entry i pointing at day i+1. They sit in
     // [4, 0] — which no served day wants now, so it is a pure dumping ground
-    // rather than a bucket they have to share with Monday.
+    // rather than a bucket they have to share with anyone.
     //          Mon     Tue     Wed     Thu     Fri     [Sat]   [Sun]
-    pattern: [[4, 1], [5, 1], [5, 2], [6, 2], [6, 3], [4, 0], [4, 0]],
+    pattern: [[5, 1], [5, 2], [6, 2], [6, 3], [7, 3], [4, 0], [4, 0]],
   },
   5: {
     cadence: 'weekend', // Saturdays and Sundays
@@ -186,6 +216,7 @@ const STREAMS = {
     // no published day changed. Must never move now: daily.js asserts on it.
     firstDay: 17,
     target: 1768, // 2 days/week ~ 17 years, so the stream outlives the daily one
+    parMax: 6, // unchanged: this pass is weekdays only, and par 7 would move Sunday
     // Consecutive entries alternate Saturday, Sunday, Saturday, Sunday — so this
     // is a two-entry pattern indexed by parity, not a weekday lookup.
     //
@@ -221,6 +252,13 @@ const STREAMS = {
 
 const STREAM = STREAMS[WORD_LEN]
 if (!STREAM) throw new Error(`no stream configured for ${WORD_LEN}-letter puzzles`)
+
+// Per-stream, because the two streams hit the ceiling at different heights and
+// raising it is not free: a longer par means a longer ladder, and the words a
+// long ladder has to route through get rarer fast. The weekday stream needs
+// par 7 to give Friday somewhere to stand; the weekend does not, and lifting it
+// there would quietly change Sunday's fallbacks. See the note above STREAMS.
+const PAR_MAX = STREAM.parMax
 
 const POOL_TARGET = STREAM.target
 
