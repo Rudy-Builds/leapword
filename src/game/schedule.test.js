@@ -145,10 +145,16 @@ describe('shipped schedules', () => {
   //
   // These entries need neither. Every one of them either has been served to
   // players — each is somebody's shared card and somebody's streak — or was
-  // already committed to before the #40 boundary the ramp moved on. The list
+  // already committed to before the boundary the latest ramp moved on. The list
   // only ever grows. If a revision reaches back past this line, this fails in
   // CI rather than in public.
-  const FROZEN_THROUGH_DAY = 40
+  //
+  // It grew from #40 to #82 because a revision sat unmerged: the v2/v3 ramps
+  // were drawn from #40 on a branch while main kept serving the original file,
+  // so by the time the branch was picked up again #40-#71 had been played from
+  // main. What is frozen is what players saw — main's entries — not what the
+  // branch had planned.
+  const FROZEN_THROUGH_DAY = 82
   const FROZEN = {
     [SHORT_LEN]: [
       'WHAT THAT THAN THEN THEM',
@@ -190,6 +196,48 @@ describe('shipped schedules', () => {
       'SUCH SUCK SICK NICK NICE NINE NONE',
       'LAST LOST LOSE LOVE MOVE',
       'MAKE MIKE MINE MIND KIND',
+      'SEND SAND SAID PAID PAIN',
+      'REST BEST BEAT BEAR DEAR',
+      'CAME SAME SALE MALE MILE MILK',
+      'GRAB GRAY PRAY PLAY PLAN ALAN',
+      'HOPE HOLE HOLD HELD HEAD HEAR FEAR',
+      'HAND HARD HARM FARM FORM',
+      'CUTE CURE CARE CARS EARS',
+      'RISK RISE ROSE NOSE NOPE',
+      'SHUT SHOT SHOP STOP STEP',
+      'BELL WELL WILL WILD WIND FIND',
+      'FISH WISH WISE WIDE SIDE SIZE',
+      'SORT PORT PART PAST EAST EASE ELSE',
+      'CAKE LAKE LIKE LIFE LIFT',
+      'FACT FACE FAKE WAKE WOKE',
+      'COOL COOK LOOK LOCK LUCK',
+      'KISS MISS MESS LESS LEGS',
+      'MATT MATE RATE RACE RICE RICK',
+      'ZERO HERO HERE WERE WORE WORD',
+      'HIDE HIRE FIRE FILE FILL FULL FUEL',
+      'DOGS DOES DIES LIES LIED',
+      'DEAL DEAD LEAD LOAD LORD',
+      'BASE CASE CAST COST COAT',
+      'KICK PICK PACK BACK BANK',
+      'CELL TELL TALL TALK TANK HANK',
+      'FATE LATE LANE LAND LAID MAID',
+      'MAIN MAIL FAIL FALL FELL FEEL FEET',
+      'BILL BALL CALL CARL CARD',
+      'GIVE GAVE GATE DATE DATA',
+      'DONE NONE NINE NICE NICK',
+      'MOVE LOVE LIVE FIVE FINE',
+      'TAPE TAKE MAKE MIKE MINE MIND',
+      'WAIT WANT WENT SENT SEAT MEAT',
+      'BEAR BEAT BEST BUST BUSY BURY JURY',
+      'BOYS BOSS LOSS LOST LIST',
+      'HURT HUNT HUNG HANG GANG',
+      'CAME COME HOME HOLE HOLD',
+      'HEAD HELD HELL HALL HALF',
+      'HAND HARD HARM FARM FIRM FILM',
+      'PAIN PAID SAID SAND BAND BANG',
+      'CHIP SHIP SHOP SHOW SNOW KNOW KNEW',
+      'FIND WIND WILD WILL WALL',
+      'RISK RISE ROSE NOSE NOTE',
     ],
     [LONG_LEN]: [
       'MOVED LOVED LIVED LIKED LIKES',
@@ -200,6 +248,18 @@ describe('shipped schedules', () => {
       'TEARS BEARS BEATS BOATS BOOTS BOOTH TOOTH',
       'WALKS WALLS BALLS BILLS BILLY',
       'STAYS STARS STARE SHARE SHORE SHORT SHOUT',
+      'FILMS FILES FIRES FIRED HIRED',
+      'TREAT GREAT GREET GREEK CREEK CHEEK CHEER',
+      'BROWN GROWN GROWS GROSS GRASS',
+      'HARSH MARSH MARCH MATCH WATCH WITCH DITCH',
+      'BUNCH BENCH BEACH REACH REACT',
+      'BREAD BREED BLEED BLEEP SLEEP SHEEP SHEET',
+      'SHAWN SHOWN SHOWS SHOTS SPOTS',
+      'HEARS HEADS LEADS LOADS LORDS WORDS WORMS',
+      'CLOWN CROWN DROWN DRAWN DRAIN',
+      'CHOSE CHASE CEASE LEASE LEAST BEAST BLAST',
+      'LATER LASER LOSER LOSES ROSES',
+      'SHOOT SHOOK SHOCK STOCK STICK STINK STING',
     ],
   }
 
@@ -212,6 +272,22 @@ describe('shipped schedules', () => {
           `${len}.json entry ${i} moved — that day has already been played`,
         )
       })
+    }
+  })
+
+  // The weekday ramp is built on hamming, not detour: from the boundary on,
+  // START and END share no letter in any position, so every letter a player
+  // fixes is progress they can see (see the supply note in build-schedule.mjs).
+  // `relax` holds this on fallbacks too, which is the half that could quietly
+  // regress — a plain outward walk from Friday's [9, 5] reaches H=3 cells first.
+  test('every served weekday from the ramp boundary changes all four letters', () => {
+    const paths = schedules[SHORT_LEN].paths
+    for (let i = FROZEN_THROUGH_DAY - 1; i < paths.length; i++) {
+      const day = i + 1
+      if (isLongDay(day)) continue // served from the weekend stream
+      const p = paths[i].split(' ')
+      const kept = [...p[0]].filter((ch, k) => ch === p.at(-1)[k]).length
+      assert.equal(kept, 0, `#${day} ${p[0]}→${p.at(-1)} starts with ${kept} letter(s) already in place`)
     }
   })
 
