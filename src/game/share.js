@@ -2,13 +2,13 @@
 //
 // SPOILER GUARD, and why this is its own module: buildShareText has no parameter
 // for `solution`. It takes `path` — the player's own moves, which they watched
-// themselves make. It is therefore not *possible* to leak the par line through
+// themselves make. It is therefore not *possible* to leak the best line through
 // it. Inline in ResultModal, `puzzle.solution` is in scope and one careless edit
 // away from being interpolated into a string that gets pasted into a group chat.
 // The type signature is the guarantee; a comment saying "don't leak" is not.
 //
 // Everything *readable* here is already public before you play: the puzzle
-// number, the start and end words (PuzzleHeader shows them), and par (ditto).
+// number, the start and end words (PuzzleHeader shows them), and best (ditto).
 // The tile row adds only your own move count and where you leapt. A winning
 // card's URL additionally carries your path SEALED as a challenge code — not
 // readable at a glance, only revealed by the recipient's client after their own
@@ -85,8 +85,8 @@ export function buildShareText({ number, start, end, path, par, stars, status, s
   const flame = won && streak > 0 ? ` · 🔥${streak}` : ''
 
   const summary = won
-    ? `${start} → ${end} in ${steps} · par ${par}`
-    : `${start} → ${end} · par ${par}`
+    ? `${start} → ${end} in ${steps} · best ${par}`
+    : `${start} → ${end} · best ${par}`
 
   // A win links as a challenge (the path rides sealed in the URL — the loop's
   // whole upgrade from boast to dare). A loss keeps the plain link: there's no

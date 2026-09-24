@@ -40,8 +40,12 @@ export function PuzzleHeader({ start, end, par, movesUsed, moveCap, leapsRemaini
           <MiniWord word={end} tone="end" />
         </div>
         <div className="header-stats">
+          {/* Label-first, unlike the two stats beside it. "6 best" reads as a
+              fragment where "best 6" reads as a fact, and one stat out of three
+              breaking the number-first rhythm costs less than one that parses
+              wrong. The number still carries the weight. */}
           <span className="stat">
-            <b>{par}</b> par
+            best <b>{par}</b>
           </span>
           <span className={`stat ${low ? 'spent' : ''}`}>
             <b>{movesUsed}</b>/{moveCap} moves

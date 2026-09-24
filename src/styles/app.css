@@ -144,6 +144,17 @@ html, body {
    as an event, where the archive bar is deliberately a murmur. */
 .challenge-bar { border-color: var(--leap); color: var(--ink); }
 
+/* The past-puzzle note folded into a challenge bar. A 100% basis drops it onto
+   its own row under the dare rather than trailing beside it, and it keeps the
+   archive bar's muted, smaller voice — the dare is the headline, this is the
+   footnote that explains the missing streak and offers the way to today's. */
+.challenge-aside {
+  flex: 1 0 100%;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 
 .archive-today {
   border: 0;

@@ -49,19 +49,19 @@ describe('buildTileRow', () => {
 describe('buildShareText', () => {
   const base = { number: 42, start: 'KIND', end: 'GIVE', par: 4, path: KIND_GIVE }
 
-  test('3 stars, par, no leaps', () => {
+  test('3 stars, best, no leaps', () => {
     assert.equal(
       buildShareText({ ...base, stars: 3, status: 'won' }),
-      `Leapword #42 ⭐⭐⭐\nKIND → GIVE in 4 · par 4\n🟩🟩🟩🟩\n${challengeUrl(42, KIND_GIVE)}`,
+      `Leapword #42 ⭐⭐⭐\nKIND → GIVE in 4 · best 4\n🟩🟩🟩🟩\n${challengeUrl(42, KIND_GIVE)}`,
     )
   })
 
-  test('2 stars, one over par with a leap', () => {
+  test('2 stars, one extra move with a leap', () => {
     const path = ['KIND', 'FIND', 'FINE', 'MINE', 'GIVE', 'GIVE']
     const leapSteps = [4, 5]
     assert.equal(
       buildShareText({ ...base, stars: 2, status: 'won', path, leapSteps }),
-      `Leapword #42 ⭐⭐\nKIND → GIVE in 5 · par 4\n🟩🟩🟩🟪🟪\n${challengeUrl(42, path, leapSteps)}`,
+      `Leapword #42 ⭐⭐\nKIND → GIVE in 5 · best 4\n🟩🟩🟩🟪🟪\n${challengeUrl(42, path, leapSteps)}`,
     )
   })
 
@@ -71,7 +71,7 @@ describe('buildShareText', () => {
 
   test('a loss prints no score and closes the row in red', () => {
     const out = buildShareText({ ...base, stars: 0, status: 'lost' })
-    assert.equal(out, `Leapword #42\nKIND → GIVE · par 4\n🟩🟩🟩🟩🟥\n${SHARE_URL}/42`)
+    assert.equal(out, `Leapword #42\nKIND → GIVE · best 4\n🟩🟩🟩🟩🟥\n${SHARE_URL}/42`)
     assert.doesNotMatch(out, /in \d/)
     assert.doesNotMatch(out, /⭐/)
     // Hollow stars are gone entirely — they read as a rating, not an absence.
@@ -157,7 +157,7 @@ describe('spoiler guard', () => {
 
     for (const word of solution.slice(1, -1)) {
       if (playerPath.includes(word)) continue
-      assert.ok(!out.includes(word), `leaked par-line word ${word}`)
+      assert.ok(!out.includes(word), `leaked best-line word ${word}`)
     }
     assert.ok(!out.includes('SHIT'))
   })

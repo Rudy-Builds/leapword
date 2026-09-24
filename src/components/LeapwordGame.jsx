@@ -97,6 +97,19 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
               {' · '}
               {'⭐'.repeat(challenge.stars)} — beat their path
             </span>
+            {/* Most challenges are opened the day after they're shared, so the
+                dare usually lands on a past puzzle. The friend's numbers still
+                lead, but the two things the archive bar was carrying — that
+                this one is off-cycle, and the one tap back to today's — ride
+                along as a quieter second line inside the same bar. */}
+            {isArchive && (
+              <span className="challenge-aside">
+                a past {isWeekend ? 'weekend' : 'puzzle'} ·{' '}
+                <button type="button" className="archive-today" onClick={onPlayToday}>
+                  Play today’s #{today} →
+                </button>
+              </span>
+            )}
           </div>
         )}
 
@@ -176,7 +189,7 @@ export function LeapwordGame({ puzzle, dictSet, number, isArchive = false, today
         )}
 
         {/* Finished, with the result dismissed: the way back to it (Share, stars,
-            and the par line all live in the modal). Sits where the input was. */}
+            and the best line all live in the modal). Sits where the input was. */}
         {!playing && !resultOpen && (
           <div className="play">
             <button className="result-reopen" type="button" onClick={() => setResultOpen(true)}>
