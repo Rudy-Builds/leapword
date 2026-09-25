@@ -6,13 +6,28 @@
 // lives in public/, is checked into git, and diffs readably in review.
 //
 // Usage:
-//   node scripts/build-schedule.mjs 4              # append-only (default)
-//   node scripts/build-schedule.mjs 5              # the Sunday stream
+//   node scripts/build-schedule.mjs 4                    # append-only (default)
+//   node scripts/build-schedule.mjs 5                    # the weekend stream
+//   node scripts/build-schedule.mjs 4 --revise-from 40   # keep #1-39, redraw the rest
 //   node scripts/build-schedule.mjs 4 --rebuild --force
-//   node scripts/build-schedule.mjs 4 --dry-run    # print stats, write nothing
+//   node scripts/build-schedule.mjs 4 --dry-run          # print stats, write nothing
 //
 // Word length selects the STREAM (see STREAMS below): 4 is the everyday puzzle,
-// 5 is Sundays only.
+// 5 is the weekend.
+//
+// THREE write modes, and the middle one exists because the other two cannot do
+// the job between them. `--extend` only appends, so once the file holds its full
+// target it is a no-op: editing the difficulty pattern under it changes nothing
+// at all, silently. `--rebuild` redraws every day, including the ones people
+// have already played and shared. Neither can express "harder from here on",
+// which is the only shape a difficulty change can take on a schedule that
+// promises #42 means the same thing forever.
+//
+// `--revise-from N` is that shape. Entries serving days before N are copied
+// through untouched; everything from N onward is redrawn with the current
+// pattern; and N is checked against the calendar so it cannot name a day anyone
+// on earth could already be playing (see REVISE_MARGIN_DAYS). History is still
+// immutable — the boundary just stops being "the end of the file".
 //
 // No PRNG, no shuffle: candidates carry a total order (worstRank, start, end)
 // and scheduling is deterministic greedy, so the same inputs always produce the
@@ -28,11 +43,24 @@ const WORD_LEN = Number(process.argv[2]) || 4
 if (WORD_LEN < 3 || WORD_LEN > 6) throw new Error(`unsupported word length: ${WORD_LEN}`)
 
 const argv = process.argv.slice(3)
-const MODE = argv.includes('--rebuild') ? 'rebuild' : 'extend'
+const reviseAt = argv.indexOf('--revise-from')
+const REVISE_FROM = reviseAt === -1 ? null : Number(argv[reviseAt + 1])
+if (reviseAt !== -1 && !Number.isInteger(REVISE_FROM)) {
+  throw new Error('--revise-from needs a puzzle number, e.g. --revise-from 40')
+}
+const MODE = argv.includes('--rebuild') ? 'rebuild' : REVISE_FROM !== null ? 'revise' : 'extend'
 const FORCE = argv.includes('--force')
 const DRY = argv.includes('--dry-run')
 
-const GENERATOR_VERSION = 1
+// v2: the weekly ramp moved up a detour and `relax` stopped reaching for the
+// easiest cell in the game when supply runs short.
+// v3: the weekday par ceiling went to 7 and every weekday slot moved up a tier.
+// v4: the weekday stream routes through the top 20k words, every weekday is
+// H=4, and its fallbacks hold hamming instead of trading it away.
+// Each of these changes which puzzle a given slot draws, so an old prefix and a
+// new suffix may only meet where --revise-from puts the seam on purpose — never
+// by appending.
+const GENERATOR_VERSION = 4
 const EPOCH = '2026-07-16' // Leapword #1. Must never move.
 const LEAPS = 2
 
@@ -43,25 +71,58 @@ const weekdayOf = (iso) =>
 /** Puzzle #n's weekday, Monday-first: 0 = Monday .. 6 = Sunday. */
 const mondayIndexOf = (n) => (new Date(Date.parse(EPOCH) + (n - 1) * 86400000).getUTCDay() + 6) % 7
 
+/** Today's puzzle number in UTC. Used only to police --revise-from. */
+const utcDayNumber = () => Math.floor((Date.now() - Date.parse(EPOCH)) / 86400000) + 1
+
+/**
+ * How far into the future --revise-from has to reach before it is safe.
+ *
+ * Puzzles roll over at LOCAL midnight (src/game/daily.js explains why), so three
+ * day numbers are live at any instant: a player in UTC+14 is already on UTC
+ * today + 1 while one in UTC-12 is still on UTC today - 1. The first number
+ * nobody on earth can be playing is therefore UTC today + 2. Anything closer
+ * would redraw a puzzle out from under someone mid-game, which is the precise
+ * betrayal the append-only rule exists to prevent — so this is a floor, not a
+ * default, and it is enforced rather than documented. Give yourself more than
+ * the minimum in practice: the revision still has to be reviewed and deployed.
+ */
+const REVISE_MARGIN_DAYS = 2
+
+// Checked here rather than beside the freeze index it guards, because it needs
+// nothing but the clock and it is the mistake people will actually make. Two
+// minutes of BFS before "you can't revise yesterday" would be two minutes of
+// nothing.
+if (MODE === 'revise') {
+  const today = utcDayNumber()
+  const earliest = today + REVISE_MARGIN_DAYS
+  if (REVISE_FROM < earliest) {
+    throw new Error(
+      `--revise-from ${REVISE_FROM} could redraw a puzzle someone is already ` +
+        `playing. Today is #${today} in UTC, and local midnight puts three day ` +
+        `numbers in play at once, so the earliest revisable day is #${earliest}.`,
+    )
+  }
+}
+
 const PAR_MIN = 4
-const PAR_MAX = 6
 
 // Two streams, and the split is forced rather than stylistic.
 //
 // The daily stream runs every day and is indexed by day number: entry i is day
-// i+1, forever. The Sunday stream runs only on Sundays from `firstDay` onward
-// and is indexed by SUNDAY ORDINAL — entry 0 is the first five-letter Sunday,
-// entry 1 the next, and so on.
+// i+1, forever. The weekend stream runs only on Saturdays and Sundays from
+// `firstDay` onward and is indexed by WEEKEND ORDINAL — entry 0 is the first
+// five-letter Saturday, entry 1 the Sunday after it, and so on.
 //
-// Indexing the Sunday stream by absolute day number instead would be simpler and
-// is not possible: covering the same ~16 years would need 6000 entries to show
-// 855 of them, and the five-letter graph yields 4743 candidate puzzles in total.
-// Ordinal indexing needs only the 855 and every one of them gets played.
+// Indexing the weekend stream by absolute day number instead would be simpler
+// and is not possible: covering the same span would need 6000 entries to show
+// the ~1714 weekend days among them, and the five-letter graph yields only 4241
+// candidate puzzles in total. Ordinal indexing needs 1768 and plays every one.
 //
-// The daily stream keeps absolute indexing, which is why turning Sundays over to
-// this stream did not move a single already-published four-letter day. It now
-// skips one entry in seven, so its 6000 days of content spans ~19 years instead
-// of ~16. That is the whole cost.
+// The daily stream keeps absolute indexing, which is why turning weekends over
+// to this stream did not move a single already-published four-letter day. It now
+// skips two entries in seven, so its 6000 days of content spans ~23 years
+// instead of ~16. That is the whole cost.
+
 // Difficulty is (par, detour), not par alone.
 //
 // detour = par - (letters that differ between START and END). Since one move
@@ -74,16 +135,53 @@ const PAR_MAX = 6
 //
 // The two are NOT independent, which bounds what a pattern can ask for:
 // par >= (letters that differ) always, and two words one letter apart are
-// adjacent (par 1). So par 4 -> detour 0-2, par 5 -> detour 1-3, par 6 -> 2-4.
+// adjacent (par 1). So at four letters par 4 -> detour 0-2, par 5 -> 1-3,
+// par 6 -> 2-4, par 7 -> 3-5.
 //
-// Supply per (par, detour) is wildly uneven, and two cells look usable but are
-// not: four-letter par-4/detour-2 holds 322 puzzles (6 years) and par-5/detour-3
-// holds 90 (one year). The patterns below route around both.
+// detour is also, exactly, the part of a puzzle a player cannot read. Their
+// only progress signal is how many letters match END, and every move shifts
+// that by +1, 0 or -1. Call the moves that make it worse u and the ones that
+// leave it flat s: then detour = 2u + s. That is an identity, not a
+// measurement, so raising detour buys difficulty by spending precisely the
+// moves where "am I on the right track?" has no answer. Hamming — the letters
+// that differ, H = par - detour — is the other way to make a puzzle long, and
+// every one of its moves is visible progress.
+//
+// Supply per cell is wildly uneven, and that unevenness — not the pattern — is
+// what decides how hard a week can get. A slot needs ~857 puzzles to run 17
+// years without repeating itself. At four letters, by routable vocabulary:
+//
+//                   rank < 10k                    rank < 20k
+//             H=2     H=3     H=4           H=2     H=3     H=4
+//   par 4     322   14672   17325          1106   46124   56927
+//   par 5      90    2807   24100           354   12182   93420
+//   par 6      11     327    8177            76    2334   43273
+//   par 7       1      64    1439            18     638   13587
+//   par 8       ·       7     185             6     181    2152
+//   par 9       ·       1       6             2      21     145
+//
+// Read down the H=4 column — every puzzle where all four letters change. At
+// 10k only par 4-7 clear the bar: four cells for a five-day week, which is why
+// a ramp that rose every day had to drop to H=3 on two of them.
+//
+// The binding constraint is COMMON_CUT, not the ladder graph, and the weekday
+// stream now spends it: at 20k the H=4 column clears the bar from par 5
+// through 8. The price is the words. A longer ladder has to route through
+// rarer ones. Over the first decade from #82, the median rarest word in a
+// served weekday goes from rank 4607 to 8325 — about 1.8x overall, and 2x on
+// Thursday and Friday, where the ladders are longest. The weekend keeps 10k.
 const STREAMS = {
   4: {
     cadence: 'weekday', // Mon-Fri; Sat and Sun come from the five-letter stream
     firstDay: 1,
     target: 6000,
+    // The weekday stream routes through the 20k most common words, not 10k,
+    // because nothing narrower can keep every letter changing all week. See the
+    // supply table above STREAMS.
+    commonCut: 20000,
+    parMax: 9, // Friday asks for 9d5
+    // `relax` gives up difficulty before legibility here. See its note.
+    holdHamming: true,
     patternIndex: 'weekday',
     // Written MONDAY-FIRST and indexed by the puzzle's real weekday.
     //
@@ -92,11 +190,32 @@ const STREAMS = {
     // the whole ramp four days — Monday drew the par-5 and Sunday drew the
     // easiest slot in the week.
     //
-    // Every step raises par or detour, so the week is monotone. Sat/Sun slots are
-    // never SERVED from this stream but the scheduler still spends a candidate on
-    // them, so they sit in the cheapest bucket rather than burning a scarce one.
+    // Every served weekday is H=4: START and END share no letter in any
+    // position, and that is the whole design. The player's one clue is how many
+    // letters match END. At H=4 it starts at zero, and every letter they fix is
+    // progress they can see. Difficulty rides on par instead — one more move
+    // each day, and each extra move is a detour — so the week gets longer and
+    // less greedy together without ever getting harder to read.
+    //
+    // The ramp before this one, [5,1] [5,2] [6,2] [6,3] [7,3], alternated par
+    // and detour to rise every day inside the 10k vocabulary, and that forced
+    // Tuesday and Thursday down to H=3: a letter already in place, so the one
+    // clue the player has was spent before they started. Monday is unchanged;
+    // Tuesday through Friday are one or two moves longer.
+    //
+    // Friday's [9, 5] is the one cell that runs short: 145 puzzles whose long
+    // ladders share words, so the 30-day window rations them — 45 of 2027's 53
+    // Fridays get one, then a handful a year. Every other Friday `relax` holds
+    // at H=4 and walks down the spine to [8, 4], level with Thursday. Measured
+    // over the first decade, Friday stands at or above Thursday in 520 of 522
+    // weeks. [8, 4] holds 2152, enough to carry both days into the late 2030s.
+    //
+    // Sat/Sun slots are never SERVED from this stream, but the scheduler still
+    // spends a candidate on them to keep entry i pointing at day i+1. They sit in
+    // [4, 0] — which no served day wants now, so it is a pure dumping ground
+    // rather than a bucket they have to share with anyone.
     //          Mon     Tue     Wed     Thu     Fri     [Sat]   [Sun]
-    pattern: [[4, 0], [4, 1], [5, 1], [5, 2], [6, 2], [4, 0], [4, 0]],
+    pattern: [[5, 1], [6, 2], [7, 3], [8, 4], [9, 5], [4, 0], [4, 0]],
   },
   5: {
     cadence: 'weekend', // Saturdays and Sundays
@@ -105,6 +224,8 @@ const STREAMS = {
     // no published day changed. Must never move now: daily.js asserts on it.
     firstDay: 17,
     target: 1768, // 2 days/week ~ 17 years, so the stream outlives the daily one
+    parMax: 6, // unchanged: this pass is weekdays only, and par 7 would move Sunday
+    commonCut: 10000, // unchanged for the same reason; see the supply table
     // Consecutive entries alternate Saturday, Sunday, Saturday, Sunday — so this
     // is a two-entry pattern indexed by parity, not a weekday lookup.
     //
@@ -113,18 +234,40 @@ const STREAMS = {
     // is a second ramp rather than a continuation of the weekday one — the same
     // reason a crossword's Sunday is the biggest grid but not the hardest.
     //
-    // Sunday is the hardest thing the game can produce. Supply is the cost:
-    // five-letter par-6/detour-2 is only 268 puzzles, so strict adherence runs
-    // ~5 years before `take` starts relaxing detour within par 6 (694 total,
-    // ~13 years). It degrades rather than starving.
+    // "Easy" still has to mean a puzzle, though, so Saturday moved [4, 0] ->
+    // [4, 1] for the same reason Monday did: detour 0 solves itself. Par 4 — the
+    // part that IS the reset — is untouched. Supply is 901 for ~884 Saturdays, so
+    // later ones lean on [4, 2] and [4, 0] via `relax`, always inside par 4.
+    //
+    // Sunday is the hardest thing the game can produce, and on five letters that
+    // is a ceiling rather than a boast: par 6 is the top of the search and only
+    // 694 five-letter puzzles reach it at all (398 at detour 1, 268 at detour 2,
+    // 27 at detour 3, 1 at detour 4). Sunday spends the hardest of those first
+    // and there is nothing above them to ask for.
+    //
+    // Supply is the cost, and it binds early: 268 puzzles at [6, 2] against 884
+    // Sundays, so `relax` is carrying this slot from year one, not decorating it.
+    // It holds every Sunday at par 6 through entry 344 — about three and a half
+    // years — and lands the remainder on par 5.
+    //
+    // What happened after par 6 ran out used to be the whole problem, and it was
+    // invisible from here: the old cascade dropped Sunday to PAR 4 for 438 of the
+    // 884, 173 of them in the first decade. See `relax`.
     patternIndex: 'weekend',
     //          Sat     Sun
-    pattern: [[4, 0], [6, 2]],
+    pattern: [[4, 1], [6, 2]],
   },
 }
 
 const STREAM = STREAMS[WORD_LEN]
 if (!STREAM) throw new Error(`no stream configured for ${WORD_LEN}-letter puzzles`)
+
+// Per-stream, because the two streams hit the ceiling at different heights and
+// raising it is not free: a longer par means a longer ladder, and the words a
+// long ladder has to route through get rarer fast. The weekday stream needs
+// par 9 to give Friday somewhere to stand; the weekend does not, and lifting it
+// there would quietly change Sunday's fallbacks. See the note above STREAMS.
+const PAR_MAX = STREAM.parMax
 
 const POOL_TARGET = STREAM.target
 
@@ -166,6 +309,36 @@ const hamming = (a, b) => {
   return n
 }
 
+const bucketKey = (par, detour) => `${par}:${detour}`
+
+// Every (par, detour) cell the search can produce, in ONE total difficulty
+// order — the same order the weekly ramp above is written in, so "harder" means
+// a single thing in this file rather than two things that can drift apart.
+//
+// detour = par - hamming, and hamming runs 1..WORD_LEN for two distinct words of
+// this length, so the cells for a given par are exactly par-WORD_LEN .. par-1.
+// Cells the graph happens not to populate are harmless: `take` returns null for
+// an empty bucket and the walk moves on.
+const CELLS = []
+for (let par = PAR_MIN; par <= PAR_MAX; par++) {
+  for (let d = Math.max(0, par - WORD_LEN); d <= par - 1; d++) CELLS.push([par, d])
+}
+const CELL_INDEX = new Map(CELLS.map(([par, d], i) => [bucketKey(par, d), i]))
+
+// Checked here, before the fetch and the BFS, so a typo in a pattern costs a
+// second rather than the two minutes it takes to reach the scheduler.
+for (const [par, d] of PATTERN) {
+  if (!CELL_INDEX.has(bucketKey(par, d))) {
+    throw new Error(`pattern asks for par ${par}/detour ${d}, impossible at ${WORD_LEN} letters`)
+  }
+}
+
+/** Which puzzle number stream entry `i` serves. The two streams differ. */
+const dayOfEntry =
+  STREAM.cadence === 'weekday'
+    ? (i) => i + 1
+    : (i) => STREAM.firstDay + Math.floor(i / 2) * 7 + (i % 2)
+
 const SCHEDULE_PATH = `public/schedule/${WORD_LEN}.json`
 const META_PATH = `public/schedule/${WORD_LEN}.meta.json`
 
@@ -199,7 +372,7 @@ const keyOf = (start, end) => (start < end ? `${start}-${end}` : `${end}-${start
 // ---------------------------------------------------------------------------
 // 1. Candidate search.
 // ---------------------------------------------------------------------------
-const { validWords, commonWords, rankOf, sources } = await loadVocab(WORD_LEN)
+const { validWords, commonWords, rankOf, sources } = await loadVocab(WORD_LEN, STREAM.commonCut)
 
 const nbrsValid = makeNeighbors(validWords, WORD_LEN)
 const nbrsCommon = makeNeighbors(commonWords, WORD_LEN)
@@ -284,7 +457,6 @@ console.log(`  routes through a blocked interior: ${candidates.filter((c) => !c.
 // ---------------------------------------------------------------------------
 // Bucketed by (par, detour) rather than par alone, because par alone does not
 // describe difficulty — see the note above STREAMS.
-const bucketKey = (par, detour) => `${par}:${detour}`
 const buckets = new Map()
 for (const c of candidates) {
   const k = bucketKey(c.par, c.detour)
@@ -292,25 +464,53 @@ for (const c of candidates) {
   buckets.get(k).list.push(c)
 }
 
-const existing = MODE === 'extend' ? await readJson(SCHEDULE_PATH) : null
+const existing = MODE === 'rebuild' ? null : await readJson(SCHEDULE_PATH)
 const kept = existing?.paths ?? []
 
 if (existing) {
   const meta = await readJson(META_PATH)
-  if (meta && meta.generatorVersion !== GENERATOR_VERSION) {
+  // A version mismatch is fatal for --extend, which would butt a new ordering
+  // against an old one at whatever index the file happens to end on. It is the
+  // POINT of --revise-from, which puts that seam at a day it has just proved
+  // nobody can be playing — so there the mismatch is the thing being fixed.
+  if (meta && meta.generatorVersion !== GENERATOR_VERSION && MODE !== 'revise') {
     throw new Error(
       `schedule was built by generator v${meta.generatorVersion}, this is ` +
         `v${GENERATOR_VERSION}. Appending would mix incompatible orderings. ` +
-        `Use --rebuild --force if you accept rewriting history.`,
+        `Use --revise-from <day> to adopt the new generator from a future day ` +
+        `onward, or --rebuild --force if you accept rewriting history.`,
     )
   }
   if (existing.epoch !== EPOCH) {
     throw new Error(`epoch moved: schedule says ${existing.epoch}, script says ${EPOCH}`)
   }
-  console.log(`\nextending existing schedule (${kept.length} days already fixed)`)
 } else if (MODE === 'rebuild' && !FORCE) {
   throw new Error('--rebuild rewrites history and needs --force')
+} else if (MODE === 'revise') {
+  throw new Error(`nothing to revise: ${SCHEDULE_PATH} does not exist`)
 }
+
+// How much of the existing file survives this run. --extend keeps all of it by
+// definition. --revise-from keeps every entry that serves a day before N, which
+// is not the same as "the first N entries": the weekend stream is indexed by
+// weekend ordinal, so its entry 8 is #45, not #9.
+let freezeIndex = kept.length
+if (MODE === 'revise') {
+  // REVISE_FROM was already checked against the calendar at parse time.
+  freezeIndex = 0
+  while (freezeIndex < kept.length && dayOfEntry(freezeIndex) < REVISE_FROM) freezeIndex++
+}
+
+// Everything before the boundary is history and is copied through verbatim.
+const frozen = kept.slice(0, freezeIndex)
+console.log(
+  MODE === 'revise'
+    ? `\nrevising from #${REVISE_FROM}: entries 0-${freezeIndex - 1} preserved ` +
+        `(through #${dayOfEntry(freezeIndex - 1)}), ${kept.length - freezeIndex} redrawn`
+    : existing
+      ? `\nextending existing schedule (${kept.length} days already fixed)`
+      : `\nbuilding from scratch`,
+)
 
 const candByKey = new Map(candidates.map((c) => [keyOf(c.start, c.end), c]))
 
@@ -323,7 +523,7 @@ const lastUsed = new Map()
 // best" rather than "year one".
 const placed = []
 
-kept.forEach((line, day) => {
+frozen.forEach((line, day) => {
   const words = line.split(' ')
   const c = candByKey.get(keyOf(words[0], words.at(-1)))
   // Mark already-published puzzles used so they can never be picked twice.
@@ -352,6 +552,59 @@ function take(par, detour, day) {
   return null
 }
 
+/**
+ * The nearest cell to the one the pattern asked for, when that cell is spent.
+ *
+ * Walks outward through CELLS and takes the first candidate that lands, trying
+ * the HARDER side of each step before the easier one. Both halves of that matter,
+ * and the cascade this replaced got both of them wrong:
+ *
+ *   - It relaxed detour DOWNWARD first, so a Sunday that could not have [6, 2]
+ *     preferred [6, 1] over [6, 3] — stepping away from the day's character
+ *     while a harder puzzle sat right there unused.
+ *   - Its last resort scanned `par 4` and then `detour 0`, so once par 6 ran dry
+ *     the hardest day of the week fell straight to the EASIEST cell the game
+ *     has. That was not theoretical. It put par 4 on 438 of the 884 scheduled
+ *     Sundays — half of them — 256 at detour 0 and 173 of them inside the first
+ *     decade, on the day the README calls the hardest thing the game can build.
+ *     Nothing reported it, because nothing had gone wrong by the only measure
+ *     being taken: the stream never starved. It just answered the wrong
+ *     question, one cell at a time, for a decade.
+ *
+ * One ordered walk makes both cases fall out of the same rule, and leaves no
+ * cliff to fall off: a starved Sunday now works down through par 6, then par 5,
+ * and only reaches par 4 if everything harder is genuinely gone.
+ *
+ * Slots that want an EASY cell degrade upward under the same rule, which is the
+ * right way round — it can only fire where supply is short, and supply is only
+ * short at the hard end.
+ *
+ * A stream with `holdHamming` walks twice. The first pass accepts only cells at
+ * least as legible as the one asked for — no fewer letters differing — so a
+ * spent Friday gives up a move of difficulty before it gives up a letter of
+ * progress the player can see. Without it, Friday's walk out of [9, 5] would
+ * drain every H=3 and H=2 cell nearby (about 210 puzzles, four years of
+ * Fridays) before reaching the H=4 cell right below it. The second pass is the
+ * plain walk, so holding hamming can never starve a day the plain walk would
+ * have fed.
+ */
+function relax(par, detour, day) {
+  const base = CELL_INDEX.get(bucketKey(par, detour))
+  const passes = STREAM.holdHamming ? [par - detour, 0] : [0]
+  for (const minHamming of passes) {
+    for (let step = 1; step < CELLS.length; step++) {
+      for (const i of [base + step, base - step]) {
+        if (i < 0 || i >= CELLS.length) continue
+        const [p, d] = CELLS[i]
+        if (p - d < minHamming) continue
+        const c = take(p, d, day)
+        if (c) return c
+      }
+    }
+  }
+  return null
+}
+
 // `day` below is the 0-based array index, so the puzzle number is day + 1.
 //
 // The weekday stream looks the pattern up by real weekday. The weekend stream's
@@ -361,30 +614,16 @@ const patternSlotFor =
     ? (day) => mondayIndexOf(day + 1)
     : (day) => day % PATTERN.length
 
-const paths = [...kept]
+const paths = [...frozen]
 let starvedAt = null
 const fallbacks = []
 
-for (let day = kept.length; day < POOL_TARGET; day++) {
+for (let day = frozen.length; day < POOL_TARGET; day++) {
   const [wantPar, wantDetour] = PATTERN[patternSlotFor(day)]
   let c = take(wantPar, wantDetour, day)
   if (!c) {
-    // Degrade, don't starve — and degrade in the order that preserves the most
-    // of the day's character. Detour first, holding par: a Sunday that slips
-    // from par-6/detour-2 to par-6/detour-1 is still the week's hardest day,
-    // where dropping to par 4 would not be. Only then give up par as well.
-    //
-    // This is load-bearing rather than theoretical: five-letter par-6/detour-2
-    // holds 268 puzzles, about five years of Sundays, so the relaxation starts
-    // firing long before the stream runs out.
-    for (const d of [wantDetour - 1, wantDetour + 1, wantDetour - 2, wantDetour + 2]) {
-      if (d >= 0 && (c = take(wantPar, d, day))) break
-    }
-    if (!c) {
-      outer: for (const par of [4, 5, 6]) {
-        for (let d = 0; d <= 4; d++) if ((c = take(par, d, day))) break outer
-      }
-    }
+    // Degrade, don't starve — see `relax` for the order and why it is that one.
+    c = relax(wantPar, wantDetour, day)
     if (c) fallbacks.push({ day, want: `${wantPar}d${wantDetour}`, got: `${c.par}d${c.detour}` })
   }
   if (!c) {
@@ -396,26 +635,32 @@ for (let day = kept.length; day < POOL_TARGET; day++) {
   paths.push(c.path.join(' '))
 }
 
-const added = paths.length - kept.length
+const drawn = paths.length - frozen.length
 const scheduled = placed.filter(Boolean)
 const yearOne = placed.slice(0, 365).filter(Boolean)
 const dirty = scheduled.filter((c) => !c.clean)
-console.log(`\nscheduled ${paths.length} days (${added} new)`)
+console.log(`\nscheduled ${paths.length} days (${frozen.length} preserved, ${drawn} drawn)`)
 console.log(`  by par: ${JSON.stringify(hist(scheduled.map((c) => c.par)))}`)
 console.log(`  by detour: ${JSON.stringify(hist(scheduled.map((c) => c.detour)))}`)
 console.log(
   `  worstRank: max ${Math.max(...scheduled.map((c) => c.worstRank))} overall, ` +
     `${Math.max(...yearOne.map((c) => c.worstRank))} across year one`,
 )
-console.log(`  pattern fallbacks: ${fallbacks.length}`)
+console.log(`  pattern fallbacks: ${fallbacks.length} of ${drawn} drawn`)
 if (fallbacks.length) {
-  // Which day slipped matters more than how many did: a run of them on one
-  // weekday means that cell is under-supplied and the pattern wants rethinking.
-  const firstAt = fallbacks[0]
-  console.log(
-    `    first at entry ${firstAt.day} (wanted ${firstAt.want}, got ${firstAt.got})` +
-      `; by want: ${JSON.stringify(hist(fallbacks.map((f) => f.want)))}`,
-  )
+  // WHICH slot slipped and WHEN matter more than how many did. A count alone
+  // can't tell a pattern that deliberately outruns a scarce cell (Friday's
+  // [9, 5], a few years in) from one that is mis-specified and slips on day one, so
+  // print the first slip per want, as a date — the unit the decision is in.
+  const firstOf = new Map()
+  for (const f of fallbacks) if (!firstOf.has(f.want)) firstOf.set(f.want, f)
+  for (const [want, f] of firstOf) {
+    const n = fallbacks.filter((x) => x.want === want).length
+    console.log(
+      `    ${want}: ${n} slips, first at entry ${f.day} ` +
+        `(${dayToDate(dayOfEntry(f.day))}) -> ${f.got}`,
+    )
+  }
 }
 console.log(
   `  blocked interiors: ${dirty.length} of ${scheduled.length} ` +
@@ -439,7 +684,7 @@ if (STREAM.cadence === 'weekend') {
   // entries per week. The assertion is the thing that keeps that arithmetic
   // honest: get it wrong and every weekend day points at the wrong puzzle.
   const first = dayToDate(STREAM.firstDay)
-  const lastDay = STREAM.firstDay + Math.floor((paths.length - 1) / 2) * 7 + ((paths.length - 1) % 2)
+  const lastDay = dayOfEntry(paths.length - 1)
   console.log(
     `  weekend stream: entry 0 is #${STREAM.firstDay} (${first}, a ${weekdayOf(first)}), ` +
       `entry ${paths.length - 1} is ${dayToDate(lastDay)} (a ${weekdayOf(dayToDate(lastDay))})`,
@@ -507,6 +752,20 @@ if (DRY) {
     },
     paths.length,
   )
+  // The schedule is append-only, so the times its future got redrawn are the
+  // one thing git history can tell you and the artifact cannot. Record them
+  // here, append-only in their own right: which day the seam sits on, and what
+  // pattern took over from it. Someone reading a puzzle they think is
+  // mis-tiered should be able to find out which generator drew it.
+  //
+  // Re-running the same revision is a re-run, not a second revision — otherwise
+  // "rebuild it yourself and check you get the same file" grows the log every
+  // time someone does it. Identical consecutive entries collapse.
+  const prevMeta = await readJson(META_PATH)
+  const priorRevisions = prevMeta?.revisions ?? []
+  const last = priorRevisions.at(-1)
+  const isRerun =
+    last && last.from === REVISE_FROM && JSON.stringify(last.pattern) === JSON.stringify(PATTERN)
   await write(META_PATH, {
     generatorVersion: GENERATOR_VERSION,
     epoch: EPOCH,
@@ -515,6 +774,20 @@ if (DRY) {
     count: paths.length,
     window: WINDOW,
     pattern: PATTERN,
+    revisions: [
+      ...(isRerun ? priorRevisions.slice(0, -1) : priorRevisions),
+      ...(MODE === 'revise'
+        ? [
+            {
+              from: REVISE_FROM,
+              preserved: frozen.length,
+              generatorVersion: GENERATOR_VERSION,
+              pattern: PATTERN,
+              at: new Date().toISOString(),
+            },
+          ]
+        : []),
+    ],
     ...sources,
     generatedAt: new Date().toISOString(),
   })

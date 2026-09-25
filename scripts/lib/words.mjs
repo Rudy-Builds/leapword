@@ -13,7 +13,10 @@ import { fileURLToPath } from 'node:url'
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-export const COMMON_CUT = 10000 // frequency cutoff for "a puzzle may route through this"
+// Default frequency cutoff for "a puzzle may route through this". Streams can
+// ask for a different one (see STREAMS in build-schedule.mjs); the typeable tier
+// ignores it entirely.
+export const COMMON_CUT = 10000
 
 // ENABLE is the curated dictionary Scrabble and most word games use. It matters:
 // a scraped "all English words" list is full of proper nouns, acronyms and junk
@@ -40,11 +43,12 @@ export const write = async (relPath, data, count) => {
  *     counts: the whole ENABLE dictionary, no frequency filter. par is measured
  *     on THIS graph, so par is a true optimum nobody can beat with an obscure
  *     word. Nothing may ever filter this tier.
- *   common (~1.1k) — what a puzzle path may route through.
+ *   common (~1.1k at the default cut) — what a puzzle path may route through.
  *
- * Both are sorted by frequency rank, so `common` is a prefix of `valid`.
+ * Both are sorted by frequency rank, so `common` is a prefix of `valid`, and
+ * `commonCut` only ever moves where that prefix ends — never what is typeable.
  */
-export async function loadVocab(wordLen) {
+export async function loadVocab(wordLen, commonCut = COMMON_CUT) {
   console.log('fetching ENABLE dictionary + frequency list…')
   const [realRaw, freqRaw] = await Promise.all([
     fetch(REAL_WORDS_URL).then((r) => r.text()),
@@ -70,17 +74,17 @@ export async function loadVocab(wordLen) {
   const byRank = (a, b) => rankOf(a) - rankOf(b) || (a < b ? -1 : a > b ? 1 : 0)
 
   const validWords = [...real].sort(byRank)
-  const commonWords = validWords.filter((w) => rankOf(w) < COMMON_CUT)
+  const commonWords = validWords.filter((w) => rankOf(w) < commonCut)
 
   console.log(`  validity: ${validWords.length} words (typeable — every real word)`)
-  console.log(`  common:   ${commonWords.length} words (puzzle paths route through these)`)
+  console.log(`  common:   ${commonWords.length} words (rank < ${commonCut}; puzzle paths route through these)`)
 
   return {
     validWords,
     commonWords,
     validSet: new Set(validWords),
     rankOf,
-    sources: { enableSha: sha(realRaw), freqSha: sha(freqRaw) },
+    sources: { enableSha: sha(realRaw), freqSha: sha(freqRaw), commonCut },
   }
 }
 
