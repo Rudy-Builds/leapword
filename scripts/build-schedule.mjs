@@ -167,9 +167,10 @@ const PAR_MIN = 4
 // The binding constraint is COMMON_CUT, not the ladder graph, and the weekday
 // stream now spends it: at 20k the H=4 column clears the bar from par 5
 // through 8. The price is the words. A longer ladder has to route through
-// rarer ones. Over the first decade from #82, the median rarest word in a
-// served weekday goes from rank 4607 to 8325 — about 1.8x overall, and 2x on
-// Thursday and Friday, where the ladders are longest. The weekend keeps 10k.
+// rarer ones. Over the first decade from #75, against the original ramp that
+// players were served before it, the median rarest word in a served weekday
+// goes from rank 3124 to 8049 — about 2.6x overall, and 2.9x on Thursday and
+// 3.9x on Friday, where the ladders are longest. The weekend keeps 10k.
 const STREAMS = {
   4: {
     cadence: 'weekday', // Mon-Fri; Sat and Sun come from the five-letter stream
@@ -204,11 +205,12 @@ const STREAMS = {
     // Tuesday through Friday are one or two moves longer.
     //
     // Friday's [9, 5] is the one cell that runs short: 145 puzzles whose long
-    // ladders share words, so the 30-day window rations them — 45 of 2027's 53
-    // Fridays get one, then a handful a year. Every other Friday `relax` holds
-    // at H=4 and walks down the spine to [8, 4], level with Thursday. Measured
-    // over the first decade, Friday stands at or above Thursday in 520 of 522
-    // weeks. [8, 4] holds 2152, enough to carry both days into the late 2030s.
+    // ladders share words, so the 30-day window rations them — 38 of 2027's 53
+    // Fridays get one, 20 in 2028, then fewer each year. Every other Friday
+    // `relax` holds at H=4 and walks down the spine to [8, 4], level with
+    // Thursday. Measured over the first decade, Friday stands at or above
+    // Thursday in all 522 weeks. [8, 4] holds 2152, enough to carry both days
+    // into 2038.
     //
     // Sat/Sun slots are never SERVED from this stream, but the scheduler still
     // spends a candidate on them to keep entry i pointing at day i+1. They sit in
