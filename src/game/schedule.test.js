@@ -145,8 +145,9 @@ describe('shipped schedules', () => {
   //
   // These entries need neither. Every one of them either has been served to
   // players — each is somebody's shared card and somebody's streak — or was
-  // already committed to before the boundary the latest ramp moved on. The list
-  // only ever grows. If a revision reaches back past this line, this fails in
+  // already committed to before the boundary the latest ramp moved on. It only
+  // gives up entries nobody has been served, and only when a revision moves the
+  // boundary earlier. If a revision reaches back past this line, this fails in
   // CI rather than in public.
   //
   // It grew from #40 to #82 because a revision sat unmerged: the v2/v3 ramps
@@ -154,7 +155,11 @@ describe('shipped schedules', () => {
   // so by the time the branch was picked up again #40-#71 had been played from
   // main. What is frozen is what players saw — main's entries — not what the
   // branch had planned.
-  const FROZEN_THROUGH_DAY = 82
+  //
+  // It then moved back to #75, the earliest day the calendar allowed, so the
+  // harder ramp started a week sooner. #75-#81 had shipped in main's file but no
+  // player had reached them, so they were redrawn rather than frozen.
+  const FROZEN_THROUGH_DAY = 75
   const FROZEN = {
     [SHORT_LEN]: [
       'WHAT THAT THAN THEN THEM',
@@ -231,13 +236,6 @@ describe('shipped schedules', () => {
       'BEAR BEAT BEST BUST BUSY BURY JURY',
       'BOYS BOSS LOSS LOST LIST',
       'HURT HUNT HUNG HANG GANG',
-      'CAME COME HOME HOLE HOLD',
-      'HEAD HELD HELL HALL HALF',
-      'HAND HARD HARM FARM FIRM FILM',
-      'PAIN PAID SAID SAND BAND BANG',
-      'CHIP SHIP SHOP SHOW SNOW KNOW KNEW',
-      'FIND WIND WILD WILL WALL',
-      'RISK RISE ROSE NOSE NOTE',
     ],
     [LONG_LEN]: [
       'MOVED LOVED LIVED LIKED LIKES',
@@ -258,8 +256,6 @@ describe('shipped schedules', () => {
       'HEARS HEADS LEADS LOADS LORDS WORDS WORMS',
       'CLOWN CROWN DROWN DRAWN DRAIN',
       'CHOSE CHASE CEASE LEASE LEAST BEAST BLAST',
-      'LATER LASER LOSER LOSES ROSES',
-      'SHOOT SHOOK SHOCK STOCK STICK STINK STING',
     ],
   }
 
